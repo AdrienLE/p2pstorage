@@ -188,56 +188,32 @@ int main(int argc, char **argv) {
   try {
     PortRange port_range(8000, 65535);
     std::string logfile, bootstrap_file("bootstrap_contacts");
-    uint16_t k(4), alpha(3), beta(2);
     std::string ip("127.0.0.1");
-    uint32_t refresh_interval(3600);
-    size_t thread_count(3);
+    JelyfishConfig jelly_config;
     po::options_description options_description("Options");
     options_description.add_options()
         ("help,h", "Print options.")
         ("version,V", "Print program version.")
         ("logfile,l", po::value(&logfile), "Path of log file.")
         ("verbose,v", po::bool_switch(), "Verbose logging to console and file.")
-//        ("kadconfigfile,g",
-//          po::value(&kadconfigpath)->default_value(kadconfigpath),
-//          "Complete pathname of kadconfig file. Default is Node<port>/."
-//          "kadconfig")
-        ("client,c", po::bool_switch(), "Start the node as a client node.")
         ("first_node,f", po::bool_switch(), "Start the node as the first one of"
             " a new network.")
-//        ("type,t", po::value(&type)->default_value(type),
-//            "Type of transport: 0 - TCP (default), 1 - UDP, 2 - Other.")
-//        ("port,p", po::value(&listening_port)->default_value(listening_port),
-//            "Local listening port of node (applicable to non-client type "
-//            "only).")
         ("port,p", po::value<PortRange>(&port_range)->multitoken(),
               "Local listening port/port-range to start non-client type node."
               "Use auto for any port.")
         ("bootstrap,b", po::value<std::string>
             (&bootstrap_file)->default_value(bootstrap_file),
             "Path to XML file with bootstrap nodes.")
-        ("k,k", po::value(&k)->default_value(k),
-            "Kademlia k; default number of contacts returned from a lookup.")
-        ("alpha,a", po::value(&alpha)->default_value(alpha),
+        ("alpha,a", po::value(&jelly_config.alpha)->default_value(jelly_config.alpha),
             "Kademlia alpha; parallel level of Find RPCs.")
-        ("beta", po::value(&beta)->default_value(beta),
+        ("beta", po::value(&jelly_config.beta)->default_value(jelly_config.beta),
             "Kademlia beta; number of returned Find RPCs required to start a "
             "subsequent iteration.")
-//        ("upnp", po::bool_switch(), "Use UPnP for Nat Traversal.")
-//        ("port_fw", po::bool_switch(), "Manually port forwarded local port.")
-//        ("secure", po::bool_switch(),
-//            "Node with keys. Can only communicate with other secure nodes")
-        ("thread_count", po::value(&thread_count)->default_value(thread_count),
+        ("thread_count", po::value(&jelly_config.thread_count)->default_value(jelly_config.thread_count),
             "Number of worker threads.")
-        ("noconsole", po::bool_switch(),
-            "Disable access to Kademlia functions (store, findvalue, "
-            "findnode, etc.) after node startup.")
-//        ("nodeinfopath", po::value(&thisnodekconfigpath),
-//        "Writes to this path a kadconfig file (with name .kadconfig) with "
-//          "this node's information.")
         ("refresh_interval,r",
-            po::value(&refresh_interval)->default_value(refresh_interval / 60),
-            "Average time between value refreshes (in minutes).");
+            po::value(&jelly_config.mean_refresh_interval)->default_value(jelly_config.mean_refresh_interval),
+            "Average time between value refreshes (in seconds).");
 
     po::variables_map variables_map;
     po::store(po::parse_command_line(argc, argv, options_description),
@@ -250,14 +226,13 @@ int main(int argc, char **argv) {
     }
 
     if (variables_map.count("version")) {
-      std::cout << "MaidSafe-DHT "
-                << maidsafe::GetMaidSafeVersion(MAIDSAFE_DHT_VERSION)
+      std::cout << "Jellyfish "
+                << JELLYFISH_VERSION
                 << std::endl;
       return 0;
     }
 
 //    ConflictingOptions(variables_map, "upnp", "port_fw");
-    ConflictingOptions(variables_map, "client", "noconsole");
     ConflictingOptions(variables_map, "first_node", "bootstrap_file");
 
     // Set up logging
@@ -298,7 +273,6 @@ int main(int argc, char **argv) {
       FLAGS_alsologtostderr = true;
     }
 
-    // Set up DemoNode
     bool first_node(variables_map["first_node"].as<bool>());
     fs::path bootstrap_file_path(bootstrap_file);
     if (variables_map.count("bootstrap")) {
@@ -316,68 +290,12 @@ int main(int argc, char **argv) {
       }
     }
 
-    thread_count = variables_map["thread_count"].as<size_t>();
-    if (thread_count > 100) {
-      ULOG(WARNING) << "Too many threads.  Setting thread count to 3.";
-      thread_count = 3;
-    }
+    jelly_config.thread_count = variables_map["thread_count"].as<size_t>();
 
-    bool client_only_node(variables_map["client"].as<bool>());
+    jelly_config.ports = std::pair<uint16_t, uint16_t>(port_range.first, port_range.second);
 
-//    type = (variables_map["type"].as<int>());
-//    if (type > 2) {
-//      ULOG(ERROR) << "Invalid transport type.  Choose 0, 1 or 2.";
-//      return 1;
-//    }
-
-
-    if (variables_map.count("refresh_interval")) {
-      refresh_interval = variables_map["refresh_interval"].as<uint32_t>();
-      refresh_interval = refresh_interval * 60;
-    } else {
-      refresh_interval = 3600;
-    }
-    bptime::seconds mean_refresh_interval(refresh_interval);
-
-//    bool secure(variables_map["secure"].as<bool>());
-
-
-    DemoNodePtr demo_node(new DemoNode);
-    ULOG(INFO) << "Creating node...";
-    demo_node->Init(static_cast<uint8_t>(thread_count), mk::KeyPairPtr(),
-                    mk::MessageHandlerPtr(), client_only_node, k, alpha, beta,
-                    mean_refresh_interval);
-    std::pair<uint16_t, uint16_t> ports(port_range.first, port_range.second);
-    int result = demo_node->Start(bootstrap_contacts, ports);
-
-    if (first_node)
-      demo_node->node()->GetBootstrapContacts(&bootstrap_contacts);
-
-    WriteContactsToFile(bootstrap_file_path, &bootstrap_contacts);
-
-    if (result != mk::kSuccess) {
-      ULOG(ERROR) << "Node failed to join the network with return code "
-                  << result;
-      demo_node->Stop(nullptr);
-      return result;
-    }
-
-    PrintNodeInfo(demo_node->node()->contact());
-
-    if (!variables_map["noconsole"].as<bool>()) {
-      Commands commands(demo_node);
-      commands.Run();
-    } else {
-      ULOG(INFO) << "===============================";
-      ULOG(INFO) << "     Press Ctrl+C to exit.";
-      ULOG(INFO) << "===============================";
-      signal(SIGINT, CtrlCHandler);
-      while (!ctrlc_pressed)
-        maidsafe::Sleep(boost::posix_time::seconds(1));
-    }
-    bootstrap_contacts.clear();
-    demo_node->Stop(&bootstrap_contacts);
-    ULOG(INFO) << "Node stopped successfully.";
+    Commands commands(jelly_config);
+    commands.Run();
   }
   catch(const std::exception &e) {
     ULOG(ERROR) << "Error: " << e.what();
@@ -385,3 +303,27 @@ int main(int argc, char **argv) {
   }
   return mk::kSuccess;
 }
+
+
+    // JellyNodePtr jelly_node(new JellyNode);
+    // ULOG(INFO) << "Creating node...";
+    // demo_node->Init(static_cast<uint8_t>(thread_count), mk::KeyPairPtr(),
+    //                 mk::MessageHandlerPtr(), false, k, alpha, beta,
+    //                 mean_refresh_interval);
+    // std::pair<uint16_t, uint16_t> ports(port_range.first, port_range.second);
+    // int result = jelly_node->Start(bootstrap_contacts, ports);
+
+    // if (first_node)
+    //   demo_node->node()->GetBootstrapContacts(&bootstrap_contacts);
+
+    // WriteContactsToFile(bootstrap_file_path, &bootstrap_contacts);
+
+    // if (result != mk::kSuccess) {
+    //   ULOG(ERROR) << "Node failed to join the network with return code "
+    //               << result << " ("
+    //               << ReturnCode2String(mk::ReturnCode(result)) << ")";
+    //   demo_node->Stop(nullptr);
+    //   return result;
+    // }
+
+    // PrintNodeInfo(demo_node->node()->contact());

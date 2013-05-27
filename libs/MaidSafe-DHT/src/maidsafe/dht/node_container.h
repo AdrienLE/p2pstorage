@@ -419,7 +419,7 @@ int NodeContainer<NodeType>::Start(
     transport::Endpoint endpoint(
         ips.empty() ? IP::from_string("127.0.0.1") : ips.front(), 0);
     int result(transport::kError);
-    std::vector<Port> try_ports;
+    std::vector<PORT> try_ports;
     if (port_range.first == port_range.second) {
       try_ports.reserve(1);
       try_ports.push_back(port_range.first);

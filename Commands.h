@@ -25,8 +25,10 @@ TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef MAIDSAFE_DHT_DEMO_COMMANDS_H_
-#define MAIDSAFE_DHT_DEMO_COMMANDS_H_
+#pragma once
+
+#include "JellyfishConfig.h"
+#include "Jellyfish.h"
 
 #include <memory>
 #include <string>
@@ -40,49 +42,36 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "maidsafe/dht/node-api.h"
 #include "maidsafe/dht/node_container.h"
 
-namespace bptime = boost::posix_time;
-
-using namespace maidsafe::dht;
-
-void PrintNodeInfo(const Contact &contact);
-
-typedef NodeContainer<Node> DemoNode;
-typedef std::shared_ptr<NodeContainer<Node>> DemoNodePtr;
-
 class Commands {
  public:
-  explicit Commands(DemoNodePtr demo_node);
+  explicit Commands(JellyfishConfig const &jelly_config) : _jelly(jelly_config) {}
   void Run();
 
  private:
   typedef std::vector<std::string> Arguments;
-  void Store(const Arguments &args, bool read_from_file);
-  void StoreCallback(const int &result,
-                     const NodeId &key,
-                     const bptime::time_duration &ttl);
-  void FindValue(const Arguments &args, bool write_to_file);
-  void FindValueCallback(FindValueReturns find_value_returns, std::string path);
-  void GetContact(const Arguments &args);
-  void GetContactsCallback(const int &result, Contact contact);
-  void FindNodes(const Arguments &args, bool write_to_file);
-  void FindNodesCallback(const int &result,
-                         std::vector<Contact> contacts,
-                         std::string path);
-  void Store50Values(const Arguments &args);
-  void Store50Callback(const int &result,
-                       const std::string &key,
-                       uint16_t *returned_count);
+  // void Store(const Arguments &args, bool read_from_file);
+  // void StoreCallback(const int &result,
+  //                    const NodeId &key,
+  //                    const bptime::time_duration &ttl);
+  // void FindValue(const Arguments &args, bool write_to_file);
+  // void FindValueCallback(FindValueReturns find_value_returns, std::string path);
+  // void GetContact(const Arguments &args);
+  // void GetContactsCallback(const int &result, Contact contact);
+  // void FindNodes(const Arguments &args, bool write_to_file);
+  // void FindNodesCallback(const int &result,
+  //                        std::vector<Contact> contacts,
+  //                        std::string path);
   void PrintUsage();
   void ProcessCommand(const std::string &cmdline);
   void PrintRpcTimings();
   void MarkResultArrived();
   bool ResultArrived() { return result_arrived_; }
-  std::shared_ptr<DemoNode> demo_node_;
-  PrivateKeyPtr null_priv_key_;
-  bool result_arrived_, finish_;
-  boost::mutex wait_mutex_;
-  boost::condition_variable wait_cond_var_;
-  std::function<void()> mark_results_arrived_;
-};
 
-#endif  // MAIDSAFE_DHT_DEMO_COMMANDS_H_
+  Jellyfish _jelly;
+
+  // PrivateKeyPtr null_priv_key_;
+  // bool result_arrived_, finish_;
+  // boost::mutex wait_mutex_;
+  // boost::condition_variable wait_cond_var_;
+  // std::function<void()> mark_results_arrived_;
+};

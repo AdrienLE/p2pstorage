@@ -78,7 +78,7 @@ Commands::Commands(DemoNodePtr demo_node) : demo_node_(demo_node),
 void Commands::Run() {
   PrintUsage();
   while (!finish_) {
-    std::cout << std::endl << std::endl << "Enter command > ";
+    std::cout << std::endl << std::endl << "Jellyfish (" << _jelly.username() << ") > ";
     std::string cmdline;
     std::getline(std::cin, cmdline);
     {
@@ -132,7 +132,8 @@ void Commands::StoreCallback(const int &result,
                              const NodeId &key,
                              const bptime::time_duration &ttl) {
   if (result != transport::kSuccess) {
-    ULOG(ERROR) << "Store operation failed with return code: " << result;
+    ULOG(ERROR) << "Store operation failed with return code: " << result
+                << " (" << ReturnCode2String(mk::ReturnCode(result)) << ")";
   } else {
     ULOG(INFO) <<
         boost::format("Successfully stored key [ %1% ] with ttl [%2%] min.")
@@ -168,7 +169,8 @@ void Commands::FindValueCallback(FindValueReturns find_value_returns,
                                  std::string path) {
   if (find_value_returns.return_code != transport::kSuccess) {
     ULOG(ERROR) << "FindValue operation failed with return code: "
-                << find_value_returns.return_code;
+                << find_value_returns.return_code
+                << " (" << ReturnCode2String(mk::ReturnCode(find_value_returns.return_code)) << ")";
   } else {
     ULOG(INFO)
         << boost::format("FindValue returned: %1% value(s), %2% closest "
@@ -221,7 +223,8 @@ void Commands::GetContact(const Arguments &args) {
 
 void Commands::GetContactsCallback(const int &result, Contact contact) {
   if (result != transport::kSuccess) {
-    ULOG(ERROR) << "GetContacts operation failed with error code: " << result;
+    ULOG(ERROR) << "GetContacts operation failed with error code: " << result
+                << " (" << ReturnCode2String(mk::ReturnCode(result)) << ")";
   } else {
     ULOG(INFO) << "GetContacts operation successfully returned:";
     PrintNodeInfo(contact);
@@ -258,7 +261,8 @@ void Commands::FindNodesCallback(const int &result,
                                  std::vector<Contact> contacts,
                                  std::string path) {
   if (result != transport::kSuccess) {
-    ULOG(ERROR) << "FindNodes operation failed with error code: " << result;
+    ULOG(ERROR) << "FindNodes operation failed with error code: " << result
+                << " (" << ReturnCode2String(mk::ReturnCode(result)) << ")";
   } else {
     if (path.empty()) {
       ULOG(INFO) << "FindNodes returned the following " << contacts.size()
@@ -273,52 +277,6 @@ void Commands::FindNodesCallback(const int &result,
     }
   }
   demo_node_->asio_service().post(mark_results_arrived_);
-}
-
-void Commands::Store50Values(const Arguments &args) {
-  if (args.size() != 1U) {
-    ULOG(ERROR) << "Invalid number of arguments for store50values command.";
-    return demo_node_->asio_service().post(mark_results_arrived_);
-  }
-
-  const uint16_t kCount(50);
-  const std::string kPrefix(args[0]);
-  uint16_t returned_count(0);
-  for (uint16_t i = 0; i != kCount; ++i) {
-    Key key(crypto::Hash<crypto::SHA512>(kPrefix +
-                                         boost::lexical_cast<std::string>(i)));
-    std::string key_str = key.ToStringEncoded(NodeId::kBase64);
-
-    std::string value;
-    for (int j = 0; j != 102400; ++j)
-      value += (kPrefix + boost::lexical_cast<std::string>(i));
-
-    bptime::time_duration ttl(boost::posix_time::pos_infin);
-    demo_node_->node()->Store(key, value, "", ttl, null_priv_key_,
-        std::bind(&Commands::Store50Callback, this, args::_1, key_str,
-                  &returned_count));
-  }
-  {
-    boost::mutex::scoped_lock lock(wait_mutex_);
-    while (returned_count != kCount) {
-      wait_cond_var_.wait(lock);
-    }
-  }
-  demo_node_->asio_service().post(mark_results_arrived_);
-}
-
-void Commands::Store50Callback(const int &result,
-                               const std::string &key,
-                               uint16_t *returned_count) {
-  if (result != transport::kSuccess) {
-    ULOG(ERROR) << boost::format("ERROR. Invalid response. Kademlia Store Value"
-                                 " key:[ %1% ]") % key;
-  } else {
-    ULOG(INFO) << boost::format("Successfully stored key [ %1% ]") % key;
-  }
-  boost::mutex::scoped_lock lock(wait_mutex_);
-  ++(*returned_count);
-  wait_cond_var_.notify_one();
 }
 
 void Commands::PrintUsage() {
@@ -338,8 +296,6 @@ void Commands::PrintUsage() {
              << "key.";
   ULOG(INFO) << "\tfindnodesfile <key> <filepath>    Find k closest nodes to "
              << "key and save their IDs to filepath.";
-  ULOG(INFO) << "\tstore50values <prefix>            Store 50 key value pairs "
-             << "of form (prefix[i], prefix[i]*100).";
 //  ULOG(INFO) << "\ttimings                           Print statistics for RPC"
 //             << " timings.";
   ULOG(INFO) << "\texit                              Stop the node and exit.";
@@ -374,30 +330,37 @@ void Commands::ProcessCommand(const std::string &cmdline) {
   if (cmd == "help") {
     PrintUsage();
     demo_node_->asio_service().post(mark_results_arrived_);
-  } else if (cmd == "getinfo") {
-    PrintNodeInfo(demo_node_->node()->contact());
-    demo_node_->asio_service().post(mark_results_arrived_);
-  } else if (cmd == "getcontact") {
-    GetContact(args);
-  } else if (cmd == "storefile") {
-    Store(args, true);
-  } else if (cmd == "storevalue") {
-    Store(args, false);
-  } else if (cmd == "findvalue") {
-    FindValue(args, false);
-  } else if (cmd == "findfile") {
-    FindValue(args, true);
-  } else if (cmd == "findnodes") {
-    FindNodes(args, false);
-  } else if (cmd == "findnodesfile") {
-    FindNodes(args, true);
-  } else if (cmd == "store50values") {
-    Store50Values(args);
-  } else if (cmd == "exit") {
+  }
+  else if (cmd == "login") {
+    if (args.size() != 2) break;
+    _jelly.login(args[0], args[1]);
+    good_size = true;
+  }
+  // else if (cmd == "getinfo") {
+  //   PrintNodeInfo(demo_node_->node()->contact());
+  //   demo_node_->asio_service().post(mark_results_arrived_);
+  // }
+  // } else if (cmd == "getcontact") {
+  //   GetContact(args);
+  // } else if (cmd == "storefile") {
+  //   Store(args, true);
+  // } else if (cmd == "storevalue") {
+  //   Store(args, false);
+  // } else if (cmd == "findvalue") {
+  //   FindValue(args, false);
+  // } else if (cmd == "findfile") {
+  //   FindValue(args, true);
+  // } else if (cmd == "findnodes") {
+  //   FindNodes(args, false);
+  // } else if (cmd == "findnodesfile") {
+  //   FindNodes(args, true);
+  // }
+  else if (cmd == "exit") {
     ULOG(INFO) << "Exiting application...";
     finish_ = true;
     demo_node_->asio_service().post(mark_results_arrived_);
-  } else {
+  }
+  else {
     ULOG(ERROR) << "Invalid command: " << cmd;
     demo_node_->asio_service().post(mark_results_arrived_);
   }
