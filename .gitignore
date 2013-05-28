@@ -11,3 +11,12 @@
 *.lai
 *.la
 *.a
+
+.DS_Store
+Examples/
+*~
+libs/Jerasure/include
+jelly
+jellyfish
+Jellyfish
+*.xcodeproj

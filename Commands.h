@@ -44,7 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class Commands {
  public:
-  explicit Commands(JellyfishConfig const &jelly_config) : _jelly(jelly_config) {}
+  explicit Commands(JellyfishConfig const &jelly_config) : _jelly(jelly_config), finish_(false) {}
   void Run();
 
  private:
@@ -65,6 +65,7 @@ class Commands {
   void ProcessCommand(const std::string &cmdline);
 
   Jellyfish _jelly;
+    bool finish_;
 
   // PrivateKeyPtr null_priv_key_;
   // bool result_arrived_, finish_;

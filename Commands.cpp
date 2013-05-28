@@ -54,20 +54,14 @@ namespace fs = boost::filesystem;
 using namespace maidsafe;
 
 
-Commands::Commands(JellyfishConfig config) : _jelly(config) {
-}
-
 void Commands::Run() {
   PrintUsage();
   while (!finish_) {
-    std::cout << std::endl << std::endl << "Jellyfish (" << _jelly.username() << ") > ";
+    std::cout << std::endl << std::endl << "Jellyfish (" << _jelly.login() << ") > ";
     std::string cmdline;
     std::getline(std::cin, cmdline);
     {
-      boost::mutex::scoped_lock lock(wait_mutex_);
       ProcessCommand(cmdline);
-      wait_cond_var_.wait(lock, std::bind(&Commands::ResultArrived, this));
-      result_arrived_ = false;
     }
   }
 }
@@ -80,7 +74,6 @@ void Commands::PrintUsage() {
 
 void Commands::ProcessCommand(const std::string &cmdline) {
   if (cmdline.empty()) {
-    demo_node_->asio_service().post(mark_results_arrived_);
     return;
   }
 
@@ -98,22 +91,23 @@ void Commands::ProcessCommand(const std::string &cmdline) {
   }
   catch(const std::exception &e) {
     ULOG(ERROR) << "Error processing command: " << e.what();
-    demo_node_->asio_service().post(mark_results_arrived_);
+      return;
   }
 
   bool good_size = false;
 
   if (cmd == "help") {
     PrintUsage();
-    demo_node_->asio_service().post(mark_results_arrived_);
     good_size = true;
   }
   else if (cmd == "login") {
-    if (args.size() != 2) break;
-    JellyfishReturnCode ret = _jelly.login(args[0], args[1]);
-    if (ret != jSuccess)
-      ULOG(ERROR) << "Login error: " << JellyfishReturnCode2String(ret);
-    good_size = true;
+    if (args.size() == 2)
+    {
+        JellyfishReturnCode ret = _jelly.login(args[0], args[1]);
+        if (ret != jSuccess)
+            ULOG(ERROR) << "Login error: " << JellyfishReturnCode2String(ret);
+        good_size = true;
+    }
   }
   // else if (cmd == "getinfo") {
   //   PrintNodeInfo(demo_node_->node()->contact());
@@ -137,37 +131,35 @@ void Commands::ProcessCommand(const std::string &cmdline) {
   else if (cmd == "exit") {
     ULOG(INFO) << "Exiting application...";
     finish_ = true;
-    demo_node_->asio_service().post(mark_results_arrived_);
     good_size = true;
   }
   else {
     ULOG(ERROR) << "Invalid command: " << cmd;
-    demo_node_->asio_service().post(mark_results_arrived_);
     return;
   }
   if (!good_size)
-    ULOG(ERROR) << "Bad number of arguments. Use help."
+    ULOG(ERROR) << "Bad number of arguments. Use help.";
 }
 
 
 
-void Commands::PrintRpcTimings() {
-//  rpcprotocol::RpcStatsMap rpc_timings(chmanager_->RpcTimings());
-//  ULOG(INFO) << boost::format("Calls  RPC Name  %40t% min/avg/max\n");
-//  for (rpcprotocol::RpcStatsMap::const_iterator it = rpc_timings.begin();
-//       it != rpc_timings.end();
-//       ++it) {
-//  ULOG(INFO) << boost::format("%1% : %2% %40t% %3% / %4% / %5% \n")
-//           % it->second.Size()
-//           % it->first.c_str()
-//           % it->second.Min()  // / 1000.0
-//           % it->second.Mean()  // / 1000.0
-//           % it->second.Max();  // / 1000.0;
-//  }
-}
+//void Commands::PrintRpcTimings() {
+////  rpcprotocol::RpcStatsMap rpc_timings(chmanager_->RpcTimings());
+////  ULOG(INFO) << boost::format("Calls  RPC Name  %40t% min/avg/max\n");
+////  for (rpcprotocol::RpcStatsMap::const_iterator it = rpc_timings.begin();
+////       it != rpc_timings.end();
+////       ++it) {
+////  ULOG(INFO) << boost::format("%1% : %2% %40t% %3% / %4% / %5% \n")
+////           % it->second.Size()
+////           % it->first.c_str()
+////           % it->second.Min()  // / 1000.0
+////           % it->second.Mean()  // / 1000.0
+////           % it->second.Max();  // / 1000.0;
+////  }
+//}
 
-void Commands::MarkResultArrived() {
-  boost::mutex::scoped_lock lock(wait_mutex_);
-  result_arrived_ = true;
-  wait_cond_var_.notify_one();
-}
+//void Commands::MarkResultArrived() {
+//  boost::mutex::scoped_lock lock(wait_mutex_);
+//  result_arrived_ = true;
+//  wait_cond_var_.notify_one();
+//}

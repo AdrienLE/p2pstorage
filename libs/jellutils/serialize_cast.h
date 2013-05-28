@@ -13,7 +13,7 @@ struct CastTo
   	Target result;
   	std::istringstream is(src);
   	portable_binary_iarchive archive(is);
-  	is >> result;
+  	archive >> result;
   	return result;
   }
 };

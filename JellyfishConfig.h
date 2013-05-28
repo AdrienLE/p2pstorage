@@ -15,5 +15,5 @@ struct JellyfishConfig
   std::pair<uint16_t, uint16_t> ports;
   std::vector<maidsafe::dht::Contact> bootstrap_contacts;
   bptime::seconds mean_refresh_interval;
-  int thread_count;
+  size_t thread_count;
 };

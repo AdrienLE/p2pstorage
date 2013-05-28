@@ -1,9 +1,10 @@
-CXX = clang++
-MAIDSAFE_DIR ?=	/usr/local/include
-CXXFLAGS = -std=c++11 -g -I../include -I$(MAIDSAFE_DIR)/include -I$(MAIDSAFE_DIR)/include/breakpad -I./libs -I.
-LDFLAGS = -L../lib -L$(MAIDSAFE_DIR)/lib -lJerasure -lmaidsafe_dht-0_32_00 -lmaidsafe_transport-0_02_00 -lmaidsafe_common-0_11_00 -lboost_program_options -lcryptopp -lglog -lbreakpad -lprotobuf -lboost_thread -lboost_filesystem -lboost_system -lboost_serialization
+CXX = /usr/local/bin/g++-4.8
+MAIDSAFE_DIR =	/Users/Adrien/MaidSafe-Common/installed/
+BREAKPAD_LINK = $(shell [ `uname` = Darwin ] || echo -lbreakpad)
+CXXFLAGS = -std=c++11 -g -I/Users/Adrien/Downloads/b_1_53_0 -I../include -I$(MAIDSAFE_DIR)/include -I$(MAIDSAFE_DIR)/include/breakpad -I./libs -I.
+LDFLAGS = -L../lib -L$(MAIDSAFE_DIR)/lib -L/Users/Adrien/Downloads/b_1_53_0/stage/lib -lJerasure -lmaidsafe_dht-0_32_00 -lmaidsafe_transport-0_02_00 -lmaidsafe_common-0_11_00 -lboost_program_options -lcryptopp -lglog $(BREAKPAD_LINK) -lprotobuf -lboost_thread -lboost_filesystem -lboost_system -lboost_serialization
 
-ALL =	jellyfish
+ALL =	jelly
 
 SRC =	$(shell echo *.cpp)
 OBJ =	$(SRC:.cpp=.o)
@@ -13,5 +14,5 @@ all: $(ALL)
 clean:
 	rm -f core *.o $(ALL) 
 
-jellyfish: $(OBJ)
-	$(CXX) $(CFLAGS) -o jellyfish $(OBJ) $(LDFLAGS)
+jelly: $(OBJ)
+	$(CXX) $(CFLAGS) -o jelly $(OBJ) $(LDFLAGS)
