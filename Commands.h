@@ -63,9 +63,6 @@ class Commands {
   //                        std::string path);
   void PrintUsage();
   void ProcessCommand(const std::string &cmdline);
-  void PrintRpcTimings();
-  void MarkResultArrived();
-  bool ResultArrived() { return result_arrived_; }
 
   Jellyfish _jelly;
 
