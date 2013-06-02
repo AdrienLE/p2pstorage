@@ -56,8 +56,8 @@ using namespace maidsafe;
 
 void Commands::Run() {
   PrintUsage();
-  while (!finish_) {
-    std::cout << std::endl << std::endl << "Jellyfish (" << _jelly.login() << ") > ";
+  while (!finish_ && std::cin.good()) {
+    std::cout << "Jellyfish (" << _jelly.login() << ") > ";
     std::string cmdline;
     std::getline(std::cin, cmdline);
     {
@@ -69,7 +69,11 @@ void Commands::Run() {
 void Commands::PrintUsage() {
   ULOG(INFO) << "\thelp                              Print options.";
   ULOG(INFO) << "\tlogin <login> <password>          Login (do this first).";
+  ULOG(INFO) << "\tcreate <login> <password>         Create (do this first).";
+  ULOG(INFO) << "\tinit_storage <path> <size>        Initialize storage (very important).";
+  ULOG(INFO) << "\tadd_file <path>                   Add file at path.";
   ULOG(INFO) << "\texit                              Stop the node and exit.";
+  ULOG(INFO) << "\nSizes are 2^<size>GB.";
 }
 
 void Commands::ProcessCommand(const std::string &cmdline) {
@@ -108,6 +112,33 @@ void Commands::ProcessCommand(const std::string &cmdline) {
             ULOG(ERROR) << "Login error: " << JellyfishReturnCode2String(ret);
         good_size = true;
     }
+  }
+  else if (cmd == "create") {
+      if (args.size() == 2)
+      {
+          JellyfishReturnCode ret = _jelly.createAccount(args[0], args[1]);
+          if (ret != jSuccess)
+              ULOG(ERROR) << "Account creation error: " << JellyfishReturnCode2String(ret);
+          good_size = true;
+      }
+  }
+  else if (cmd == "init_storage") {
+      if (args.size() == 2)
+      {
+          JellyfishReturnCode ret = _jelly.initStorage(args[0], boost::lexical_cast<uint64_t>(args[1]));
+          if (ret != jSuccess)
+              ULOG(ERROR) << "Storage initialization error: " << JellyfishReturnCode2String(ret);
+          good_size = true;
+      }
+  }
+  else if (cmd == "add_file") {
+      if (args.size() == 1)
+      {
+          JellyfishReturnCode ret = _jelly.addFile(args[0]);
+          if (ret != jSuccess)
+              ULOG(ERROR) << "Add file error: " << JellyfishReturnCode2String(ret);
+          good_size = true;
+      }
   }
   // else if (cmd == "getinfo") {
   //   PrintNodeInfo(demo_node_->node()->contact());

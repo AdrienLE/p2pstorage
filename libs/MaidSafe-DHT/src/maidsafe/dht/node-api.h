@@ -59,35 +59,35 @@ namespace dht {
 
 class NodeImpl;
 
-// This class represents a kademlia node providing the API to join the network,
-// find nodes and values, store, delete and update values, as well as the
-// methods to access the local storage of the node and its routing table.
+/// This class represents a kademlia node providing the API to join the network,
+/// find nodes and values, store, delete and update values, as well as the
+/// methods to access the local storage of the node and its routing table.
 class Node {
  public:
-  // asio_service is a reference to a boost::asio::io_service instance which
-  // should have at least 1 thread running io_service::run().
-  //
-  // listening_transport is responsible for listening only, not sending.  It
-  // need not be listening before it is passed, it will be started in Join.
-  //
-  // default_securifier is responsible for signing, verification, encrypting and
-  // decrypting messages and values.  If it is an invalid pointers, a basic
-  // instantiation will be made.  For all other member functions where a
-  // securifer is passed, if it is invalid, this default_securifier will be used
-  // instead.
-  //
-  // client_only_node specifies whether the node should be treated as a client
-  // on the network rather than a full peer.  In client mode, the node does not
-  // accept store requests and is not added to other nodes' routing tables.
-  //
-  // k, alpha and beta are as defined for standard Kademlia, i.e. number of
-  // contacts returned from a Find RPC, parallel level of Find RPCs, and number
-  // of returned Find RPCs required to start a subsequent iteration
-  // respectively.
-  //
-  // mean_refresh_interval indicates the average interval between calls to
-  // refresh values.
-  Node(boost::asio::io_service &asio_service,                 // NOLINT (Fraser)
+  /// asio_service is a reference to a boost::asio::io_service instance which
+  /// should have at least 1 thread running io_service::run().
+  ///
+  /// listening_transport is responsible for listening only, not sending.  It
+  /// need not be listening before it is passed, it will be started in Join.
+  ///
+  /// default_securifier is responsible for signing, verification, encrypting and
+  /// decrypting messages and values.  If it is an invalid pointers, a basic
+  /// instantiation will be made.  For all other member functions where a
+  /// securifer is passed, if it is invalid, this default_securifier will be used
+  /// instead.
+  ///
+  /// client_only_node specifies whether the node should be treated as a client
+  /// on the network rather than a full peer.  In client mode, the node does not
+  /// accept store requests and is not added to other nodes' routing tables.
+  ///
+  /// k, alpha and beta are as defined for standard Kademlia, i.e. number of
+  /// contacts returned from a Find RPC, parallel level of Find RPCs, and number
+  /// of returned Find RPCs required to start a subsequent iteration
+  /// respectively.
+  ///
+  /// mean_refresh_interval indicates the average interval between calls to
+  /// refresh values.
+  Node(boost::asio::io_service &asio_service,                 /// NOLINT (Fraser)
        TransportPtr listening_transport,
        MessageHandlerPtr message_handler,
        KeyPairPtr default_key_pair,
@@ -99,24 +99,24 @@ class Node {
 
   ~Node();
 
-  // Join the network.  If the listening_transport cannot be started (or is not
-  // already started) on the desired port, the callback indicates failure.
-  // bootstrap_contacts should be directly-connected peers to allow successful
-  // NAT detection.
+  /// Join the network.  If the listening_transport cannot be started (or is not
+  /// already started) on the desired port, the callback indicates failure.
+  /// bootstrap_contacts should be directly-connected peers to allow successful
+  /// NAT detection.
   void Join(const NodeId &node_id,
             std::vector<Contact> bootstrap_contacts,
             JoinFunctor callback);
 
-  // Leave the kademlia network.  All values stored in the node are erased and
-  // all directly-connected nodes from the routing table are passed into
-  // bootstrap_contacts.
+  /// Leave the kademlia network.  All values stored in the node are erased and
+  /// all directly-connected nodes from the routing table are passed into
+  /// bootstrap_contacts.
   void Leave(std::vector<Contact> *bootstrap_contacts);
 
-  // Store <key,value,signature> for ttl.  Infinite ttl is indicated by
-  // boost::posix_time::pos_infin.  If signature is empty, the value is signed
-  // using securifier, unless it is invalid, in which case the node's
-  // default_securifier signs value.  If signature is not empty, it is
-  // validated by securifier or default_securifer.
+  /// Store <key,value,signature> for ttl.  Infinite ttl is indicated by
+  /// boost::posix_time::pos_infin.  If signature is empty, the value is signed
+  /// using securifier, unless it is invalid, in which case the node's
+  /// default_securifier signs value.  If signature is not empty, it is
+  /// validated by securifier or default_securifer.
   void Store(const Key &key,
              const std::string &value,
              const std::string &signature,
@@ -124,26 +124,26 @@ class Node {
              PrivateKeyPtr private_key,
              StoreFunctor callback);
 
-  // Delete <key,value,signature> from network.  If signature is empty, the
-  // value is signed using securifier, unless it is invalid, in which case
-  // the node's default_securifier signs value.  If signature is not empty, it
-  // is validated by securifier or default_securifer.  The securifier must sign
-  // and encrypt with the same cryptographic keys as were used when the
-  // <key,value,signature> was stored.
+  /// Delete <key,value,signature> from network.  If signature is empty, the
+  /// value is signed using securifier, unless it is invalid, in which case
+  /// the node's default_securifier signs value.  If signature is not empty, it
+  /// is validated by securifier or default_securifer.  The securifier must sign
+  /// and encrypt with the same cryptographic keys as were used when the
+  /// <key,value,signature> was stored.
   void Delete(const Key &key,
               const std::string &value,
               const std::string &signature,
               PrivateKeyPtr private_key,
               DeleteFunctor callback);
 
-  // Replace <key,old_value,old_signature> with <key,new_value,new_signature>
-  // on the network.  If either signature is empty, the corresponding value is
-  // signed using securifier, unless it is invalid, in which case the node's
-  // default_securifier signs the value.  If a signature is not empty, it is
-  // validated by securifier or default_securifer.  The securifier must sign
-  // and encrypt with the same cryptographic keys as were used when the
-  // <key,old_value,old_signature> was stored.  Infinite ttl is indicated by
-  // boost::posix_time::pos_infin.
+  /// Replace <key,old_value,old_signature> with <key,new_value,new_signature>
+  /// on the network.  If either signature is empty, the corresponding value is
+  /// signed using securifier, unless it is invalid, in which case the node's
+  /// default_securifier signs the value.  If a signature is not empty, it is
+  /// validated by securifier or default_securifer.  The securifier must sign
+  /// and encrypt with the same cryptographic keys as were used when the
+  /// <key,old_value,old_signature> was stored.  Infinite ttl is indicated by
+  /// boost::posix_time::pos_infin.
   void Update(const Key &key,
               const std::string &new_value,
               const std::string &new_signature,
@@ -153,102 +153,102 @@ class Node {
               PrivateKeyPtr private_key,
               UpdateFunctor callback);
 
-  // Find value(s) on the network.  The callback will always have passed to it
-  // the contact details of the node needing a cache copy of the value(s) (i.e.
-  // the last node during the search to not hold the value(s)).  This could be
-  // an empty contact (e.g. if the lookup failed, or was completed by the first
-  // RPC's callback).  If cache is true for this lookup, the cache contact is
-  // not empty, and the value(s) are found, then the cache contact is sent the
-  // value(s) for caching.
-  //
-  // Other than this, the callback parameters are populated as follows:
-  // * If any queried peer holds the value(s) outwith its kademlia datastore
-  //   (indicated by a positive result from invoking the check_cache_functor
-  //   which has a setter below), its details are passed in the callback and no
-  //   other callback parameters are completed.  In this case, the return code
-  //   is kFoundCachedCopyHolder.
-  // * If any queried peer holds the value(s) in its kademlia datastore, the
-  //   value(s) and signature(s) are passed in the callback and no other
-  //   callback parameters are completed.  In this case, the return code is
-  //   kSuccess.
-  // * Otherwise, iff no value exists under key, the (k + extra) closest nodes'
-  //   details are passed in callback, ordered by kademlia closeness to key,
-  //   closest first.  In this case, the return code is kFailedToFindValue.
-  //
-  // These return codes are all >= 0.  Any other return code indicates an error
-  // in the lookup process and will be < 0.  N.B. This node could be returned as
-  // the cached_copy_holder or as one of the closest contacts.
+  /// Find value(s) on the network.  The callback will always have passed to it
+  /// the contact details of the node needing a cache copy of the value(s) (i.e.
+  /// the last node during the search to not hold the value(s)).  This could be
+  /// an empty contact (e.g. if the lookup failed, or was completed by the first
+  /// RPC's callback).  If cache is true for this lookup, the cache contact is
+  /// not empty, and the value(s) are found, then the cache contact is sent the
+  /// value(s) for caching.
+  ///
+  /// Other than this, the callback parameters are populated as follows:
+  /// * If any queried peer holds the value(s) outwith its kademlia datastore
+  ///   (indicated by a positive result from invoking the check_cache_functor
+  ///   which has a setter below), its details are passed in the callback and no
+  ///   other callback parameters are completed.  In this case, the return code
+  ///   is kFoundCachedCopyHolder.
+  /// * If any queried peer holds the value(s) in its kademlia datastore, the
+  ///   value(s) and signature(s) are passed in the callback and no other
+  ///   callback parameters are completed.  In this case, the return code is
+  ///   kSuccess.
+  /// * Otherwise, iff no value exists under key, the (k + extra) closest nodes'
+  ///   details are passed in callback, ordered by kademlia closeness to key,
+  ///   closest first.  In this case, the return code is kFailedToFindValue.
+  ///
+  /// These return codes are all >= 0.  Any other return code indicates an error
+  /// in the lookup process and will be < 0.  N.B. This node could be returned as
+  /// the cached_copy_holder or as one of the closest contacts.
   void FindValue(const Key &key,
                  PrivateKeyPtr private_key,
                  FindValueFunctor callback,
                  const uint16_t &extra_contacts = 0,
                  bool cache = true);
 
-  // Find details of (k + extra) nodes closest to key.  The details are passed
-  // in callback, ordered by kademlia closeness to key, closest first.
-  // N.B. This node could be returned as one of the closest contacts.
+  /// Find details of (k + extra) nodes closest to key.  The details are passed
+  /// in callback, ordered by kademlia closeness to key, closest first.
+  /// N.B. This node could be returned as one of the closest contacts.
   void FindNodes(const Key &key,
                  FindNodesFunctor callback,
                  const uint16_t &extra_contacts = 0);
 
-  // Find the contact details of a node.  If the target node is not in this
-  // node's routing table (and is not this node), a FindNode will be executed.
-  // If the node is offline, a default-constructed Contact will be passed back
-  // in the callback.
+  /// Find the contact details of a node.  If the target node is not in this
+  /// node's routing table (and is not this node), a FindNode will be executed.
+  /// If the node is offline, a default-constructed Contact will be passed back
+  /// in the callback.
   void GetContact(const NodeId &node_id, GetContactFunctor callback);
 
-  // Setter for the functor which will be called by Node and Service to retrieve
-  // the public key and public key validation token for a given contact.
+  /// Setter for the functor which will be called by Node and Service to retrieve
+  /// the public key and public key validation token for a given contact.
   void SetContactValidationGetter(
       asymm::GetPublicKeyAndValidationFunctor contact_validation_getter);
 
-  // Setter for the functor which will be invoked in the callback of
-  // contact_validation_getter above.  It will return true if the retrieved
-  // public key validates correctly against the retrieved validation token.
+  /// Setter for the functor which will be invoked in the callback of
+  /// contact_validation_getter above.  It will return true if the retrieved
+  /// public key validates correctly against the retrieved validation token.
   void SetContactValidator(asymm::ValidatePublicKeyFunctor contact_validator);
 
-  // Setter for the functor which will be invoked for checking a signature
-  // against a given public key.
+  /// Setter for the functor which will be invoked for checking a signature
+  /// against a given public key.
   void SetValidate(asymm::ValidateFunctor validate_functor);
 
-  // Mark contact in routing table as having just been seen (i.e. contacted).
+  /// Mark contact in routing table as having just been seen (i.e. contacted).
   void SetLastSeenToNow(const Contact &contact);
 
-  // Mark contact in routing table as having failed to respond correctly to an
-  // RPC request.
+  /// Mark contact in routing table as having failed to respond correctly to an
+  /// RPC request.
   void IncrementFailedRpcs(const Contact &contact);
 
-  // Update contact in routing table with revised rank info.
+  /// Update contact in routing table with revised rank info.
   void UpdateRankInfo(const Contact &contact, RankInfoPtr rank_info);
 
-  // Retrieve rank info from contact in routing table.  No network operation is
-  // executed.
+  /// Retrieve rank info from contact in routing table.  No network operation is
+  /// executed.
   RankInfoPtr GetLocalRankInfo(const Contact &contact);
 
-  // Retrieve all contacts from the routing table.  No network operation is
-  // executed.
+  /// Retrieve all contacts from the routing table.  No network operation is
+  /// executed.
   void GetAllContacts(std::vector<Contact> *contacts);
 
-  // Retrieve all directly-connected contacts from the routing table.  No
-  // network operation is executed.
+  /// Retrieve all directly-connected contacts from the routing table.  No
+  /// network operation is executed.
   void GetBootstrapContacts(std::vector<Contact> *contacts);
 
-  // Checks whether the contact is online or not
+  /// Checks whether the contact is online or not
   void Ping(const Contact &contact, PingFunctor callback);
 
-  // Sets a functor which is invoked whenever this node's Service receives a
-  // FindValue RPC.  If the functor returns true, the node responds that it has
-  // a copy of the requested value (somewhere other than its internal
-  // DataStore), and hence causes the peer's lookup to terminate.
+  /// Sets a functor which is invoked whenever this node's Service receives a
+  /// FindValue RPC.  If the functor returns true, the node responds that it has
+  /// a copy of the requested value (somewhere other than its internal
+  /// DataStore), and hence causes the peer's lookup to terminate.
   void set_check_cache_functor(const CheckCacheFunctor &check_cache_functor);
 
-  // This node's contact details
+  /// This node's contact details
   Contact contact() const;
 
-  // Whether node is currently joined to the network.
+  /// Whether node is currently joined to the network.
   bool joined() const;
 
-  // Getters
+  /// Getters
   OnOnlineStatusChangePtr on_online_status_change();
   bool client_only_node() const;
   uint16_t k() const;

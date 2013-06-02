@@ -53,6 +53,7 @@
 #include "maidsafe/common/log.h"
 
 #include "Commands.h"
+#include "Jellyfish.h"
 
 namespace bptime = boost::posix_time;
 namespace fs = boost::filesystem;
@@ -233,7 +234,7 @@ int main(int argc, char **argv) {
         }
         
         //    ConflictingOptions(variables_map, "upnp", "port_fw");
-        ConflictingOptions(variables_map, "first_node", "bootstrap_file");
+        //    ConflictingOptions(variables_map, "first_node", "bootstrap_file");
         
         // Set up logging
         if (variables_map["verbose"].as<bool>()) {
@@ -280,20 +281,27 @@ int main(int argc, char **argv) {
             fs::path(variables_map["bootstrap"].as<std::string>());
         }
         std::vector<maidsafe::dht::Contact> bootstrap_contacts;
-        if (!first_node) {
-            if (!ReadContactsFromFile(bootstrap_file_path, &bootstrap_contacts)) {
-                return 1;
-            }
-            if (bootstrap_contacts.empty()) {
-                LOG(ERROR) << "No contacts found in bootstrap contacts file.";
-                return 1;
-            }
+        if (!ReadContactsFromFile(bootstrap_file_path, &bootstrap_contacts) && !first_node) {
+            return 1;
         }
-        
+        if (bootstrap_contacts.empty() && !first_node) {
+            LOG(ERROR) << "No contacts found in bootstrap contacts file.";
+            return 1;
+        }
+
+        jelly_config.bootstrap_contacts = bootstrap_contacts;
+
         jelly_config.thread_count = variables_map["thread_count"].as<size_t>();
-        
+
         jelly_config.ports = std::pair<uint16_t, uint16_t>(port_range.first, port_range.second);
-        
+
+        if (first_node)
+        {
+            Jellyfish jelly(jelly_config);
+            jelly.runInitNode(bootstrap_file_path);
+            return mk::kSuccess;
+        }
+
         Commands commands(jelly_config);
         commands.Run();
     }
