@@ -201,17 +201,17 @@ void Jellyfish::startServer()
 }
 
 #define W 15
-#define OPTIMAL_PACKET_SIZE 2800
+#define OPTIMAL_PACKET_SIZE 4000
 
 static int getPacketSize(uint64_t size, int n_parts)
 {
     int min = OPTIMAL_PACKET_SIZE;
     int minpacketsize = OPTIMAL_PACKET_SIZE;
-    for (int packetsize = minpacketsize; packetsize > 100; --packetsize)
+    for (int packetsize = minpacketsize; packetsize > 8 && packetsize*W*8*n_parts > size / 100; --packetsize)
     {
-        if (size % (n_parts*W*packetsize*sizeof(int)) + minpacketsize - packetsize < min && packetsize % 8 == 0)
+        if ((size < n_parts*W*packetsize*8 || size % (n_parts*W*packetsize*8) + minpacketsize - packetsize) < min && packetsize % 8 == 0)
         {
-            min = size % (n_parts*W*packetsize*sizeof(int));
+            min = size % (n_parts*W*packetsize*8);
             minpacketsize = packetsize;
         }
     }
@@ -231,15 +231,17 @@ void Jellyfish::getPartsCodes(std::istream &content, uint64_t size, int n_parts,
     boost::shared_ptr<int *> schedule(::jerasure_smart_bitmatrix_to_schedule(n_parts, n_codes, W, bitmatrix.get()), ::jerasure_free_schedule);
     std::vector<char *> cparts(n_parts);
     std::vector<char *> ccodes(n_codes);
-    char *buffer = (char*)aligned_alloc(sizeof(long), packetsize*8*W*n_parts + sizeof(long));
+    char *buffer = (char*)aligned_alloc(sizeof(long), packetsize*8*W*n_parts);
     for (int i = 0; i < n_parts; ++i)
         cparts[i] = buffer + i * packetsize * 8 * W;
     for (int i = 0; i < n_codes; ++i)
-        ccodes[i] = (char*)aligned_alloc(sizeof(long), packetsize*8*W + sizeof(long));
+        ccodes[i] = (char*)aligned_alloc(sizeof(long), packetsize*8*W);
     for (size_t done = 0; done < real_size; done += packetsize * 8 * W * n_parts)
     {
         memset(buffer, 0, n_parts * packetsize * 8 * W);
         content.read(&buffer[0], n_parts * packetsize * 8 * W);
+        printf("jerasure_schedule_encode(%d, %d, %d, %p, %p, %p, %d, %d)\n", n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
+
         ::jerasure_schedule_encode(n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
         auto cpy = [=](std::vector<char *> const &d, std::vector<std::ostream *> const &to)
         {
@@ -286,20 +288,20 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
         erasures.push_back(i);
     erasures.push_back(-1);
 
-    boost::shared_ptr<char> buffer((char*)aligned_alloc(sizeof(long), packetsize * 8 * W * total_parts + sizeof(long) * total_parts), free);
+    boost::shared_ptr<char> buffer((char*)aligned_alloc(sizeof(long), packetsize * 8 * W * total_parts), free);
     std::vector<char *> data(n_parts);
     for (int i = 0; i < n_parts; ++i)
     {
-        data[i] = buffer.get() + i * (packetsize * W * 8 + sizeof(long));
+        data[i] = buffer.get() + i * (packetsize * W * 8);
     }
     std::vector<char *> codes(n_codes);
     for (int i = 0; i < n_codes; ++i)
     {
-        codes[i] = buffer.get() + (n_parts + i) * (packetsize * W * 8 + sizeof(long));
+        codes[i] = buffer.get() + (n_parts + i) * (packetsize * W * 8);
     }
-    for (uint64_t total_size = 0; total_size < real_size; total_size += packetsize * W * 8 * n_parts)
+    for (uint64_t total_size = 0; total_size < real_size; )
     {
-        memset(buffer.get(), 0, packetsize * 8 * W * total_parts + sizeof(long) * total_parts);
+        memset(buffer.get(), 0, packetsize * 8 * W * total_parts);
         for (int i = 0; i < position.size(); ++i)
         {
             int pos = position[i];
@@ -317,16 +319,14 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
                 out.write(data[i], std::min((uint64_t)packetsize * 8 * W, size - total_size));
             total_size += packetsize * 8 * W;
         }
+        printf("%lu < %lu (%lu)\n", total_size, real_size, size);
     }
     return true;
 }
 
 void lol()
 {
-    std::string s = maidsafe::RandomString(rand() % 100000);
-
-    std::ofstream f("a");
-    f.write(s.c_str(), s.size());
+    std::string s = maidsafe::RandomString(rand() % 50000000);
 
     printf("packet: %d, buf: %d\n", getPacketSize(s.size(), 5), W*8*getPacketSize(s.size(), 5)*5);
 
@@ -348,7 +348,9 @@ void lol()
     std::vector<std::istream *> i;
     std::transform(streams.begin(), streams.end(), std::back_inserter(i), [](std::ostream *o)
     {
-        return new std::istringstream(((std::ostringstream *)o)->str());
+        auto tmp = new std::istringstream(((std::ostringstream *)o)->str());
+        delete o;
+        return tmp;
     });
     std::vector<int> positions;
     for (int i = 0; i < 5; ++i)
@@ -382,6 +384,9 @@ void lol()
         printf("Error\n");
     else
         printf("Awesome\n");
+
+    for (std::istream *s: i)
+        delete s;
 
     //printf("%s\n", maidsafe::EncodeToBase64(((std::ostringstream *)streams[disp % 15])->str()).c_str());
 }
