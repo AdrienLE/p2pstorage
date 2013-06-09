@@ -7,6 +7,8 @@
 #include "JellyfishInternal.h"
 #include "gen-cpp/JellyInternal.h"
 
+#include "jellutils/pipe_link.h"
+
 #include "thrift/transport/TServerSocket.h"
 #include "thrift/transport/TSocket.h"
 #include "thrift/protocol/TBinaryProtocol.h"
@@ -19,9 +21,20 @@ extern "C"
 #include "jerasure/cauchy.h"
 };
 
+#include "cryptopp/gzip.h"
+#include "cryptopp/hex.h"
+#include "cryptopp/aes.h"
+#include "cryptopp/modes.h"
+#include "cryptopp/osrng.h"
+#include "cryptopp/pssr.h"
+#include  "cryptopp/ida.h"
+#include "cryptopp/pwdbased.h"
+#include "cryptopp/cryptlib.h"
+
 #include <boost/lexical_cast.hpp>
 #include <boost/format.hpp>
 #include <boost/shared_array.hpp>
+#include <boost/timer/timer.hpp>
 #include <unistd.h>
 #include <pwd.h>
 #include <exception>
@@ -207,7 +220,7 @@ static int getPacketSize(uint64_t size, int n_parts)
 {
     int min = OPTIMAL_PACKET_SIZE;
     int minpacketsize = OPTIMAL_PACKET_SIZE;
-    for (int packetsize = minpacketsize; packetsize > 8 && packetsize*W*8*n_parts > size / 100; --packetsize)
+    for (int packetsize = minpacketsize; packetsize > 8 && packetsize > size / 1000; --packetsize)
     {
         if ((size < n_parts*W*packetsize*8 || size % (n_parts*W*packetsize*8) + minpacketsize - packetsize) < min && packetsize % 8 == 0)
         {
@@ -240,8 +253,6 @@ void Jellyfish::getPartsCodes(std::istream &content, uint64_t size, int n_parts,
     {
         memset(buffer, 0, n_parts * packetsize * 8 * W);
         content.read(&buffer[0], n_parts * packetsize * 8 * W);
-        printf("jerasure_schedule_encode(%d, %d, %d, %p, %p, %p, %d, %d)\n", n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
-
         ::jerasure_schedule_encode(n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
         auto cpy = [=](std::vector<char *> const &d, std::vector<std::ostream *> const &to)
         {
@@ -319,46 +330,125 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
                 out.write(data[i], std::min((uint64_t)packetsize * 8 * W, size - total_size));
             total_size += packetsize * 8 * W;
         }
-        printf("%lu < %lu (%lu)\n", total_size, real_size, size);
     }
     return true;
 }
 
-void lol()
+#define N_PARTS 5
+#define N_CODES 5
+
+uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, std::string const &filename_in, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes)
 {
-    std::string s = maidsafe::RandomString(rand() % 50000000);
-
-    printf("packet: %d, buf: %d\n", getPacketSize(s.size(), 5), W*8*getPacketSize(s.size(), 5)*5);
-
-    std::istringstream is(s);
-    std::vector<std::ostream *> parts(5), codes(10);
-    std::generate(parts.begin(), parts.end(), [](){return new std::ostringstream();});
-    std::generate(codes.begin(), codes.end(), [](){return new std::ostringstream();});
-    //for (int current = 0; current < 5; ++current)
-    //{
-    //    parts[current] = new std::ofstream(std::string("k_")+boost::lexical_cast<std::string>(current));
-    //}
-    //for (int current = 0; current < 10; ++current)
-    //{
-    //    codes[current] = new std::ofstream(std::string("m_")+boost::lexical_cast<std::string>(current));
-    //}
-    Jellyfish::getPartsCodes(is, s.size(), 5, 10, parts, codes);
-    std::vector<std::ostream *> streams(parts);
-    std::copy(codes.begin(), codes.end(), std::back_inserter(streams));
-    std::vector<std::istream *> i;
-    std::transform(streams.begin(), streams.end(), std::back_inserter(i), [](std::ostream *o)
+    if (key.size() < crypto::AES256_KeySize || iv.size() < crypto::AES256_IVSize)
     {
-        auto tmp = new std::istringstream(((std::ostringstream *)o)->str());
-        delete o;
-        return tmp;
+        DLOG(WARNING) << "Undersized key or IV";
+        return -1; // TODO: return false
+    }
+    bool success_a = true, success_b = true;
+    uint64_t size;
+    // TODO: Problem: what if compressed file is small enough to be stored directly?
+    pipe_link(
+        [&](const char *filename)
+    {
+        try
+        {
+            byte bkey[crypto::AES256_KeySize], biv[crypto::AES256_IVSize];
+
+            CryptoPP::StringSource(key.substr(0, crypto::AES256_KeySize), true,
+                new CryptoPP::ArraySink(bkey, sizeof(bkey)));
+            CryptoPP::StringSource(iv.substr(0, crypto::AES256_IVSize), true,
+                new CryptoPP::ArraySink(biv, sizeof(biv)));
+
+            CryptoPP::CFB_Mode<CryptoPP::AES>::Encryption encryptor(bkey, sizeof(bkey), biv);
+            CryptoPP::FileSource(filename_in.c_str(), true,
+                new CryptoPP::Gzip(
+                new CryptoPP::StreamTransformationFilter(encryptor,
+                new CryptoPP::FileSink(filename)), 9));
+        }
+        catch (...)
+        {
+            success_a = false;
+        }
+    },
+        [&](const char *filename)
+    {
+        std::ifstream f(filename);
+        if (f)
+        {
+            f.seekg(0, std::ios::end);
+            size = f.tellg();
+            f.seekg(0, std::ios::beg);
+        }
+        Jellyfish::getPartsCodes(f, size, N_PARTS, N_CODES, parts, codes);
+    }, true);
+    if (!success_a || !success_b)
+        return -1;//TODO: return success_a && success_b;
+    return size;
+}
+
+bool Jellyfish::decodeFile(std::string const &iv, std::string const &key, std::vector<std::istream *> const &in, std::vector<int> const &positions, uint64_t size, std::string const &filename_out)
+{
+    if (key.size() < crypto::AES256_KeySize || iv.size() < crypto::AES256_IVSize)
+    {
+        DLOG(WARNING) << "Undersized key or IV";
+        return false;
+    }
+    bool success_a = true, success_b = true;
+    pipe_link(
+        [&](const char *filename)
+    {
+        std::ofstream f(filename);
+        success_a = Jellyfish::getContentFromCodes(in, positions, N_PARTS, N_CODES, size, f);
+    },
+        [&](const char *filename)
+    {
+        try
+        {
+            byte bkey[crypto::AES256_KeySize], biv[crypto::AES256_IVSize];
+
+            CryptoPP::StringSource(key.substr(0, crypto::AES256_KeySize), true,
+                new CryptoPP::ArraySink(bkey, sizeof(bkey)));
+            CryptoPP::StringSource(iv.substr(0, crypto::AES256_IVSize), true,
+                new CryptoPP::ArraySink(biv, sizeof(biv)));
+
+            CryptoPP::CFB_Mode<CryptoPP::AES>::Decryption decryptor(bkey, sizeof(bkey), biv);
+            CryptoPP::FileSource(filename, true,
+                new CryptoPP::StreamTransformationFilter(decryptor,
+                new CryptoPP::Gunzip(
+                new CryptoPP::FileSink(filename_out.c_str(), true))));
+        }
+        catch (...)
+        {
+            success_b = false;
+        }
     });
+    if (!success_a || !success_b)
+        unlink(filename_out.c_str());
+    return success_a && success_b;
+}
+
+int main2()
+{
+    //{
+    //    std::string r = maidsafe::RandomString(10000);
+    //    std::ofstream f("a");
+    //    f.write(r.c_str(), r.size());
+    //}
+    std::string k = maidsafe::RandomString(crypto::AES256_KeySize), iv = maidsafe::RandomString(crypto::AES256_IVSize);
+    std::vector<std::ostream *> parts, codes;
+    for (int i = 0; i < 5; ++i)
+    {
+        parts.push_back(new std::ofstream(std::string("k_") + boost::lexical_cast<std::string>(i)));
+        codes.push_back(new std::ofstream(std::string("m_") + boost::lexical_cast<std::string>(i)));
+    }
+    uint64_t size = Jellyfish::encodeFile(iv, k, "kjvdat.txt", parts, codes);
     std::vector<int> positions;
     for (int i = 0; i < 5; ++i)
     {
         int r;
         while (true)
         {
-            r = rand() % 15;
+            r = rand() % 10;
             bool cont = false;
             for (int p: positions)
                 if (r == p)
@@ -369,37 +459,13 @@ void lol()
         positions.push_back(r);
     }
     std::sort(positions.begin(), positions.end());
-    printf("%d %d %d %d %d\n", positions[0], positions[1], positions[2], positions[3], positions[4]);
-    std::vector<std::istream *> iparts;
-    std::transform(positions.begin(), positions.end(), std::back_inserter(iparts), [&](int p)
+    std::vector<std::istream *> data;
+    for (int i = 0; i < 5; ++i)
     {
-        return i[p];
-    });
-    std::ostringstream out;
-    Jellyfish::getContentFromCodes(iparts, positions, 5, 10, s.size(), out);
-    std::string a = out.str();
-    //printf("%s\n\n%s\n\n", a.c_str(), s.c_str());
-    printf("%lu, %lu\n", a.size(), s.size());
-    if (a != s)
-        printf("Error\n");
-    else
-        printf("Awesome\n");
-
-    for (std::istream *s: i)
-        delete s;
-
-    //printf("%s\n", maidsafe::EncodeToBase64(((std::ostringstream *)streams[disp % 15])->str()).c_str());
-}
-
-int main(int ac, char **av)
-{
-    srand(getpid());
-    int n = 1;
-    if (ac == 2)
-        n = atoi(av[1]);
-    for (int i = 0; i < n; ++i)
-        lol();
-    return 0;
+        data.push_back(new std::ifstream(std::string((positions[i] < N_PARTS) ? "k_" : "m_") +
+            boost::lexical_cast<std::string>((positions[i] < N_PARTS) ? positions[i] : positions[i] - N_PARTS)));
+    }
+    Jellyfish::decodeFile(iv, k, data, positions, size, "b");
 }
 
 #define SALT_BYTES 16
@@ -865,3 +931,88 @@ void PrintNodeInfo(const mk::Contact &contact) {
 //   }
 //   demo_node_->asio_service().post(mark_results_arrived_);
 // }
+
+
+//void lol()
+//{
+//    std::string s = maidsafe::RandomString(/*rand() % */50000000);
+//
+//    printf("packet: %d, buf: %d\n", getPacketSize(s.size(), 5), W*8*getPacketSize(s.size(), 5)*5);
+//
+//    std::istringstream is(s);
+//    std::vector<std::ostream *> parts(5), codes(10);
+//    std::generate(parts.begin(), parts.end(), [](){return new std::ostringstream();});
+//    std::generate(codes.begin(), codes.end(), [](){return new std::ostringstream();});
+//    //for (int current = 0; current < 5; ++current)
+//    //{
+//    //    parts[current] = new std::ofstream(std::string("k_")+boost::lexical_cast<std::string>(current));
+//    //}
+//    //for (int current = 0; current < 10; ++current)
+//    //{
+//    //    codes[current] = new std::ofstream(std::string("m_")+boost::lexical_cast<std::string>(current));
+//    //}
+//    {
+//        boost::timer::auto_cpu_timer t;
+//        Jellyfish::getPartsCodes(is, s.size(), 5, 10, parts, codes);
+//    }
+//    std::vector<std::ostream *> streams(parts);
+//    std::copy(codes.begin(), codes.end(), std::back_inserter(streams));
+//    std::vector<std::istream *> i;
+//    std::transform(streams.begin(), streams.end(), std::back_inserter(i), [](std::ostream *o)
+//    {
+//        auto tmp = new std::istringstream(((std::ostringstream *)o)->str());
+//        delete o;
+//        return tmp;
+//    });
+//    std::vector<int> positions;
+//    for (int i = 0; i < 5; ++i)
+//    {
+//        int r;
+//        while (true)
+//        {
+//            r = rand() % 15;
+//            bool cont = false;
+//            for (int p: positions)
+//                if (r == p)
+//                    cont = true;
+//            if (!cont)
+//                break;
+//        }
+//        positions.push_back(r);
+//    }
+//    std::sort(positions.begin(), positions.end());
+//    printf("%d %d %d %d %d\n", positions[0], positions[1], positions[2], positions[3], positions[4]);
+//    std::vector<std::istream *> iparts;
+//    std::transform(positions.begin(), positions.end(), std::back_inserter(iparts), [&](int p)
+//    {
+//        return i[p];
+//    });
+//    std::ostringstream out;
+//    {
+//        boost::timer::auto_cpu_timer t;
+//        Jellyfish::getContentFromCodes(iparts, positions, 5, 10, s.size(), out);
+//    }
+//    std::string a = out.str();
+//    //printf("%s\n\n%s\n\n", a.c_str(), s.c_str());
+//    printf("%lu, %lu\n", a.size(), s.size());
+//    if (a != s)
+//        printf("Error\n");
+//    else
+//        printf("Awesome\n");
+//
+//    for (std::istream *s: i)
+//        delete s;
+//
+//    //printf("%s\n", maidsafe::EncodeToBase64(((std::ostringstream *)streams[disp % 15])->str()).c_str());
+//}
+//
+//int main(int ac, char **av)
+//{
+//    srand(getpid());
+//    int n = 1;
+//    if (ac == 2)
+//        n = atoi(av[1]);
+//    for (int i = 0; i < n; ++i)
+//        lol();
+//    return 0;
+//}

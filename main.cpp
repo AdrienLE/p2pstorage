@@ -166,7 +166,7 @@ void validate(boost::any& v, const std::vector<std::string>& values,
     v = port_range;
 }
 
-int main2(int argc, char **argv) {
+int main(int argc, char **argv) {
     maidsafe::InitLogging(argv[0]);
 #ifndef __APPLE__
     fs::path cur_path = fs::initial_path();

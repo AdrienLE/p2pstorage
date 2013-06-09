@@ -3,6 +3,7 @@
 #include "thrift/server/TThreadPoolServer.h"
 #include "maidsafe/common/utils.h"
 #include "maidsafe/common/log.h"
+#include "maidsafe/common/crypto.h"
 #include "JellyfishNode.h"
 #include "JellyfishConfig.h"
 #include "jellutils/enum.h"
@@ -132,6 +133,9 @@ public:
     
     static void getPartsCodes(std::istream &content, uint64_t size, int n_parts, int n_codes, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes);
     static bool getContentFromCodes(std::vector<std::istream *> in, std::vector<int> position, int n_parts, int n_codes, uint64_t size, std::ostream &out);
+
+    static uint64_t encodeFile(std::string const &iv, std::string const &key, std::string const &filename_in, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes);
+    static bool decodeFile(std::string const &iv, std::string const &key, std::vector<std::istream *> const &in, std::vector<int> const &positions, uint64_t size, std::string const &filename_out);
 
 protected:
     JellyfishConfig _jelly_conf;
