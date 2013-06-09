@@ -209,7 +209,7 @@ static int getPacketSize(uint64_t size, int n_parts)
     int minpacketsize = OPTIMAL_PACKET_SIZE;
     for (int packetsize = minpacketsize; packetsize > 100; --packetsize)
     {
-        if (size % (n_parts*W*packetsize*sizeof(int)) + minpacketsize - packetsize < min)
+        if (size % (n_parts*W*packetsize*sizeof(int)) + minpacketsize - packetsize < min && packetsize % 8 == 0)
         {
             min = size % (n_parts*W*packetsize*sizeof(int));
             minpacketsize = packetsize;
@@ -240,7 +240,6 @@ void Jellyfish::getPartsCodes(std::istream &content, uint64_t size, int n_parts,
     {
         memset(buffer, 0, n_parts * packetsize * 8 * W);
         content.read(&buffer[0], n_parts * packetsize * 8 * W);
-        printf("jerasure_schedule_encode(%d, %d, %d, %p, %p, %p, %d, %d)\n", n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
         ::jerasure_schedule_encode(n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
         auto cpy = [=](std::vector<char *> const &d, std::vector<std::ostream *> const &to)
         {
@@ -287,9 +286,6 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
         erasures.push_back(i);
     erasures.push_back(-1);
 
-    for (int erasure: erasures)
-        printf("erasure: %d\n", erasure);
-
     boost::shared_ptr<char> buffer((char*)aligned_alloc(sizeof(long), packetsize * 8 * W * total_parts + sizeof(long) * total_parts), free);
     std::vector<char *> data(n_parts);
     for (int i = 0; i < n_parts; ++i)
@@ -309,32 +305,16 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
             int pos = position[i];
             in[i]->read((pos < n_parts) ? data[position[i]] : codes[position[i] - n_parts], packetsize * 8 * W);
         }
-        for (int i = 0; i < data.size(); ++i)
-        {
-            unsigned int checksum = 0;
-            for (int j = 0; j < packetsize * 8 * W; ++j)
-                checksum += data[i][j];
-            printf("checksum: %u\n", checksum);
-        }
-        for (int i = 0; i < codes.size(); ++i)
-        {
-            unsigned int checksum = 0;
-            for (int j = 0; j < packetsize * 8 * W; ++j)
-                checksum += codes[i][j];
-            printf("checksum: %u\n", checksum);
-        }
-        printf("jerasure_schedule_decode_lazy(%d, %d, %d, %p, %p, %p, %p, %d, %d, 1)\n", n_parts, n_codes,
-            W, bitmatrix.get(), &erasures[0], &data[0], &codes[0], packetsize * 8 * W, packetsize);
         if (::jerasure_schedule_decode_lazy(n_parts, n_codes, W, bitmatrix.get(),
                                             &erasures[0], &data[0], &codes[0],
                                             packetsize * 8 * W, packetsize, 1) != 0)
         {
             return false;
         }
-        printf("c: '%c'\n", data[0][0]);
         for (int i = 0; i < n_parts; ++i)
         {
-            out.write(data[i], std::min((uint64_t)packetsize * 8 * W, size - total_size));
+            if (size > total_size)
+                out.write(data[i], std::min((uint64_t)packetsize * 8 * W, size - total_size));
             total_size += packetsize * 8 * W;
         }
     }
@@ -343,9 +323,7 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
 
 void lol()
 {
-    std::string s = "a";
-    for (int i = 0; i < 16; ++i)
-        s += s;
+    std::string s = maidsafe::RandomString(rand() % 100000);
 
     std::ofstream f("a");
     f.write(s.c_str(), s.size());
@@ -372,22 +350,22 @@ void lol()
     {
         return new std::istringstream(((std::ostringstream *)o)->str());
     });
-    std::vector<int> positions = {10, 11, 12, 13, 14};
-    //for (int i = 0; i < 5; ++i)
-    //{
-    //    int r;
-    //    while (true)
-    //    {
-    //        r = rand() % 15;
-    //        bool cont = false;
-    //        for (int p: positions)
-    //            if (r == p)
-    //                cont = true;
-    //        if (!cont)
-    //            break;
-    //    }
-    //    positions.push_back(r);
-    //}
+    std::vector<int> positions;
+    for (int i = 0; i < 5; ++i)
+    {
+        int r;
+        while (true)
+        {
+            r = rand() % 15;
+            bool cont = false;
+            for (int p: positions)
+                if (r == p)
+                    cont = true;
+            if (!cont)
+                break;
+        }
+        positions.push_back(r);
+    }
     std::sort(positions.begin(), positions.end());
     printf("%d %d %d %d %d\n", positions[0], positions[1], positions[2], positions[3], positions[4]);
     std::vector<std::istream *> iparts;
@@ -399,16 +377,18 @@ void lol()
     Jellyfish::getContentFromCodes(iparts, positions, 5, 10, s.size(), out);
     std::string a = out.str();
     //printf("%s\n\n%s\n\n", a.c_str(), s.c_str());
-    for (int i = 0; i < s.size(); ++i)
-    {
-        if (a[i] != s[i]);
-        //printf("%d: %c - %c\n", i, a[i], s[i]);
-    }
+    printf("%lu, %lu\n", a.size(), s.size());
+    if (a != s)
+        printf("Error\n");
+    else
+        printf("Awesome\n");
+
     //printf("%s\n", maidsafe::EncodeToBase64(((std::ostringstream *)streams[disp % 15])->str()).c_str());
 }
 
-int main2(int ac, char **av)
+int main(int ac, char **av)
 {
+    srand(getpid());
     int n = 1;
     if (ac == 2)
         n = atoi(av[1]);
