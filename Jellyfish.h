@@ -20,7 +20,8 @@ MAKE_ENUM(JellyfishReturnCode,
           (jNotLoggedIn)
           (jFileSystemError)
           (jNoNodes)
-          (jAddError))
+          (jAddError)
+          (jDisconnected)) // We should make it as unlikely as possible that this will occur.
 
 namespace mk = maidsafe::dht;
 
@@ -63,13 +64,64 @@ public:
     {
         StorageData() : size(0) {}
         uint64_t size;
-        std::string path;
 
         template<class Archive>
         void serialize(Archive & ar, const unsigned version)
         {
             ar & size;
-            ar & path;
+        }
+    };
+
+    struct FileBlockInfo
+    {
+        std::string iv;
+        std::string hash_id;
+        std::string node_id; // Can be compressed by storing the first few bytes.
+
+        template<class Archive>
+        void serialize(Archive & ar, const unsigned version)
+        {
+            ar & iv;
+            ar & hash_id;
+            ar & node_id;
+        }
+    };
+
+    struct StoredBlock
+    {
+        std::string file_id;
+        std::string hash_id;
+        uint32_t size;
+
+        template<class Archive>
+        void serialize(Archive & ar, const unsigned version)
+        {
+            ar & file_id;
+            ar & hash_id;
+            ar & size;
+        }
+    };
+
+    struct File
+    {
+        std::string relative_path;
+        std::string salt;
+        std::string hash;
+        uint64_t size;
+        uint16_t real_parts;
+        uint16_t code_parts;
+        std::vector<FileBlockInfo> blocks;
+
+        template<class Archive>
+        void serialize(Archive & ar, const unsigned version)
+        {
+            ar & relative_path;
+            ar & salt;
+            ar & hash;
+            ar & size;
+            ar & real_parts;
+            ar & code_parts;
+            ar & blocks;
         }
     };
 
@@ -78,6 +130,9 @@ public:
     JellyInternalStatus::type localRemove(std::string const &id, ClientProof const &client);
     void hashPart(HashStatus &res, std::string const &id, std::string const &salt, ClientProof const &client);
     
+    static void getPartsCodes(std::istream &content, uint64_t size, int n_parts, int n_codes, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes);
+    static bool getContentFromCodes(std::vector<std::istream *> in, std::vector<int> position, int n_parts, int n_codes, uint64_t size, std::ostream &out);
+
 protected:
     JellyfishConfig _jelly_conf;
     
@@ -86,25 +141,29 @@ protected:
     
     JellyNodePtr _jelly_node;
     mk::KeyPairPtr _keys;
+    mk::PrivateKeyPtr _private_key_ptr;
     std::string _login;
     UserData _user_data;
     StorageData _storage_data;
+    std::string _storage_path;
     bool _logged_in;
     boost::shared_ptr<boost::thread> _server_thread;
     boost::shared_ptr<apache::thrift::server::TThreadPoolServer> _server;
     boost::mutex _wait_mutex;
     typedef boost::mutex::scoped_lock scoped_lock;
     
-    enum Table
-    {
-        tUser,
-        tStorage,
-        tFile
-    };
+    MAKE_ENUM(Table,
+        (tUser)
+        (tFile)
+        (tStorage)
+        (tFileKey)
+        (tClientParts)
+        (tUserFiles))
     
     maidsafe::dht::Key getKey(Table table, std::string const &key);
     std::string getNodeIdUser(std::string login);
     void startServer();
+    bool contactServer(maidsafe::dht::Contact const &contact, boost::function<bool (JellyInternalClient &)> fct, bool raise = false, bool log = false);
     
     template<class Type>
     class Synchronizer

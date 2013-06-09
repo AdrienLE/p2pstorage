@@ -1,21 +1,32 @@
 #include "Jellyfish.h"
+
 #include "maidsafe/common/rsa.h"
 #include "maidsafe/common/utils.h"
 #include "maidsafe/common/log.h"
 
-#include <boost/lexical_cast.hpp>
-#include <boost/format.hpp>
-#include <unistd.h>
-#include <pwd.h>
-#include <exception>
-
 #include "JellyfishInternal.h"
 #include "gen-cpp/JellyInternal.h"
+
 #include "thrift/transport/TServerSocket.h"
 #include "thrift/transport/TSocket.h"
 #include "thrift/protocol/TBinaryProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 #include "thrift/concurrency/PosixThreadFactory.h"
+
+extern "C"
+{
+#include "jerasure/jerasure.h"
+#include "jerasure/cauchy.h"
+};
+
+#include <boost/lexical_cast.hpp>
+#include <boost/format.hpp>
+#include <boost/shared_array.hpp>
+#include <unistd.h>
+#include <pwd.h>
+#include <exception>
+#include <sstream>
+#include <fstream>
 
 namespace mt = maidsafe::transport;
 namespace asymm = maidsafe::rsa;
@@ -68,7 +79,8 @@ JellyfishReturnCode Jellyfish::createAccount(std::string const &login, std::stri
     user_data.private_key = crypto::SymmEncrypt(privat, crypt_key, iv);
     asymm::EncodePublicKey(keys.public_key, &publi);
     user_data.public_key = publi;
-    user_data.aes256_key = maidsafe::RandomString(crypto::AES256_KeySize);
+    std::string aes_key = maidsafe::RandomString(crypto::AES256_KeySize);
+    asymm::Encrypt(aes_key, keys.public_key, &user_data.aes256_key);
     std::string value = serialize_cast<std::string>(user_data);
 
     ULOG(INFO) << "Storing user.\n";
@@ -136,6 +148,7 @@ JellyfishReturnCode Jellyfish::login(std::string const &login, std::string const
     _keys->private_key = privat;
     _keys->public_key = publi;
     _keys->identity = getNodeIdUser(login);
+    _private_key_ptr = mk::PrivateKeyPtr(new asymm::PrivateKey(privat));
     
     _jelly_node.reset(new JellyNode);
     _jelly_node->Init(static_cast<uint8_t>(_jelly_conf.thread_count),
@@ -143,6 +156,8 @@ JellyfishReturnCode Jellyfish::login(std::string const &login, std::string const
                       _jelly_conf.alpha, _jelly_conf.beta, _jelly_conf.mean_refresh_interval);
     _jelly_node->Start(_jelly_conf.bootstrap_contacts, _jelly_conf.ports);
     _logged_in = true;
+    std::string aes_copy(user_data.aes256_key);
+    asymm::Decrypt(aes_copy, _keys->private_key, &user_data.aes256_key);
     _user_data = user_data;
     startServer();
     return jSuccess;
@@ -185,6 +200,359 @@ void Jellyfish::startServer()
     condvar.wait(lock);
 }
 
+#define W 15
+#define OPTIMAL_PACKET_SIZE 2800
+
+static int getPacketSize(uint64_t size, int n_parts)
+{
+    int min = OPTIMAL_PACKET_SIZE;
+    int minpacketsize = OPTIMAL_PACKET_SIZE;
+    for (int packetsize = minpacketsize; packetsize > 100; --packetsize)
+    {
+        if (size % (n_parts*W*packetsize*sizeof(int)) + minpacketsize - packetsize < min)
+        {
+            min = size % (n_parts*W*packetsize*sizeof(int));
+            minpacketsize = packetsize;
+        }
+    }
+    return minpacketsize;
+}
+
+void Jellyfish::getPartsCodes(std::istream &content, uint64_t size, int n_parts, int n_codes, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes)
+{
+    int packetsize = getPacketSize(size, n_parts);
+
+    uint64_t real_size = size;
+    while (real_size % (n_parts*W*packetsize*8) != 0)
+        real_size++;
+
+    boost::shared_ptr<int> matrix(::cauchy_good_general_coding_matrix(n_parts, n_codes, W), free);
+    boost::shared_ptr<int> bitmatrix(::jerasure_matrix_to_bitmatrix(n_parts, n_codes, W, matrix.get()), free);
+    boost::shared_ptr<int *> schedule(::jerasure_smart_bitmatrix_to_schedule(n_parts, n_codes, W, bitmatrix.get()), ::jerasure_free_schedule);
+    std::vector<char *> cparts(n_parts);
+    std::vector<char *> ccodes(n_codes);
+    char *buffer = (char*)aligned_alloc(sizeof(long), packetsize*8*W*n_parts + sizeof(long));
+    for (int i = 0; i < n_parts; ++i)
+        cparts[i] = buffer + i * packetsize * 8 * W;
+    for (int i = 0; i < n_codes; ++i)
+        ccodes[i] = (char*)aligned_alloc(sizeof(long), packetsize*8*W + sizeof(long));
+    for (size_t done = 0; done < real_size; done += packetsize * 8 * W * n_parts)
+    {
+        memset(buffer, 0, n_parts * packetsize * 8 * W);
+        content.read(&buffer[0], n_parts * packetsize * 8 * W);
+        printf("jerasure_schedule_encode(%d, %d, %d, %p, %p, %p, %d, %d)\n", n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
+        ::jerasure_schedule_encode(n_parts, n_codes, W, schedule.get(), &cparts[0], &ccodes[0], packetsize * W * 8, packetsize);
+        auto cpy = [=](std::vector<char *> const &d, std::vector<std::ostream *> const &to)
+        {
+            for (size_t i = 0; i < to.size(); ++i)
+                to[i]->write(d[i], packetsize * 8 * W);
+        };
+        cpy(cparts, parts);
+        cpy(ccodes, codes);
+    }
+    auto flush = [](std::vector<std::ostream *> const &v)
+    {
+        for (std::ostream *o: v)
+        {
+            o->flush();
+        }
+    };
+    flush(parts);
+    flush(codes);
+    free(buffer);
+    for (char *c: ccodes)
+        free(c);
+}
+
+bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<int> position, int n_parts, int n_codes, uint64_t size, std::ostream &out)
+{
+    int packetsize = getPacketSize(size, n_parts);
+    uint64_t real_size = size;
+    while (real_size % (n_parts*W*packetsize*8) != 0)
+        real_size++;
+
+    boost::shared_ptr<int> matrix(::cauchy_good_general_coding_matrix(n_parts, n_codes, W), free);
+    boost::shared_ptr<int> bitmatrix(::jerasure_matrix_to_bitmatrix(n_parts, n_codes, W, matrix.get()), free);
+
+    int total_parts = n_codes + n_parts;
+    std::vector<int> erasures;
+    int last_unknown = 0;
+    for (int p: position)
+    {
+        for (int i = last_unknown; i < p; ++i)
+            erasures.push_back(i);
+        last_unknown = p + 1;
+    }
+    for (int i = last_unknown; i < total_parts; ++i)
+        erasures.push_back(i);
+    erasures.push_back(-1);
+
+    for (int erasure: erasures)
+        printf("erasure: %d\n", erasure);
+
+    boost::shared_ptr<char> buffer((char*)aligned_alloc(sizeof(long), packetsize * 8 * W * total_parts + sizeof(long) * total_parts), free);
+    std::vector<char *> data(n_parts);
+    for (int i = 0; i < n_parts; ++i)
+    {
+        data[i] = buffer.get() + i * (packetsize * W * 8 + sizeof(long));
+    }
+    std::vector<char *> codes(n_codes);
+    for (int i = 0; i < n_codes; ++i)
+    {
+        codes[i] = buffer.get() + (n_parts + i) * (packetsize * W * 8 + sizeof(long));
+    }
+    for (uint64_t total_size = 0; total_size < real_size; total_size += packetsize * W * 8 * n_parts)
+    {
+        memset(buffer.get(), 0, packetsize * 8 * W * total_parts + sizeof(long) * total_parts);
+        for (int i = 0; i < position.size(); ++i)
+        {
+            int pos = position[i];
+            in[i]->read((pos < n_parts) ? data[position[i]] : codes[position[i] - n_parts], packetsize * 8 * W);
+        }
+        for (int i = 0; i < data.size(); ++i)
+        {
+            unsigned int checksum = 0;
+            for (int j = 0; j < packetsize * 8 * W; ++j)
+                checksum += data[i][j];
+            printf("checksum: %u\n", checksum);
+        }
+        for (int i = 0; i < codes.size(); ++i)
+        {
+            unsigned int checksum = 0;
+            for (int j = 0; j < packetsize * 8 * W; ++j)
+                checksum += codes[i][j];
+            printf("checksum: %u\n", checksum);
+        }
+        printf("jerasure_schedule_decode_lazy(%d, %d, %d, %p, %p, %p, %p, %d, %d, 1)\n", n_parts, n_codes,
+            W, bitmatrix.get(), &erasures[0], &data[0], &codes[0], packetsize * 8 * W, packetsize);
+        if (::jerasure_schedule_decode_lazy(n_parts, n_codes, W, bitmatrix.get(),
+                                            &erasures[0], &data[0], &codes[0],
+                                            packetsize * 8 * W, packetsize, 1) != 0)
+        {
+            return false;
+        }
+        printf("c: '%c'\n", data[0][0]);
+        for (int i = 0; i < n_parts; ++i)
+        {
+            out.write(data[i], std::min((uint64_t)packetsize * 8 * W, size - total_size));
+            total_size += packetsize * 8 * W;
+        }
+    }
+    return true;
+}
+
+void lol()
+{
+    std::string s = "a";
+    for (int i = 0; i < 16; ++i)
+        s += s;
+
+    std::ofstream f("a");
+    f.write(s.c_str(), s.size());
+
+    printf("packet: %d, buf: %d\n", getPacketSize(s.size(), 5), W*8*getPacketSize(s.size(), 5)*5);
+
+    std::istringstream is(s);
+    std::vector<std::ostream *> parts(5), codes(10);
+    std::generate(parts.begin(), parts.end(), [](){return new std::ostringstream();});
+    std::generate(codes.begin(), codes.end(), [](){return new std::ostringstream();});
+    //for (int current = 0; current < 5; ++current)
+    //{
+    //    parts[current] = new std::ofstream(std::string("k_")+boost::lexical_cast<std::string>(current));
+    //}
+    //for (int current = 0; current < 10; ++current)
+    //{
+    //    codes[current] = new std::ofstream(std::string("m_")+boost::lexical_cast<std::string>(current));
+    //}
+    Jellyfish::getPartsCodes(is, s.size(), 5, 10, parts, codes);
+    std::vector<std::ostream *> streams(parts);
+    std::copy(codes.begin(), codes.end(), std::back_inserter(streams));
+    std::vector<std::istream *> i;
+    std::transform(streams.begin(), streams.end(), std::back_inserter(i), [](std::ostream *o)
+    {
+        return new std::istringstream(((std::ostringstream *)o)->str());
+    });
+    std::vector<int> positions = {10, 11, 12, 13, 14};
+    //for (int i = 0; i < 5; ++i)
+    //{
+    //    int r;
+    //    while (true)
+    //    {
+    //        r = rand() % 15;
+    //        bool cont = false;
+    //        for (int p: positions)
+    //            if (r == p)
+    //                cont = true;
+    //        if (!cont)
+    //            break;
+    //    }
+    //    positions.push_back(r);
+    //}
+    std::sort(positions.begin(), positions.end());
+    printf("%d %d %d %d %d\n", positions[0], positions[1], positions[2], positions[3], positions[4]);
+    std::vector<std::istream *> iparts;
+    std::transform(positions.begin(), positions.end(), std::back_inserter(iparts), [&](int p)
+    {
+        return i[p];
+    });
+    std::ostringstream out;
+    Jellyfish::getContentFromCodes(iparts, positions, 5, 10, s.size(), out);
+    std::string a = out.str();
+    //printf("%s\n\n%s\n\n", a.c_str(), s.c_str());
+    for (int i = 0; i < s.size(); ++i)
+    {
+        if (a[i] != s[i]);
+        //printf("%d: %c - %c\n", i, a[i], s[i]);
+    }
+    //printf("%s\n", maidsafe::EncodeToBase64(((std::ostringstream *)streams[disp % 15])->str()).c_str());
+}
+
+int main2(int ac, char **av)
+{
+    int n = 1;
+    if (ac == 2)
+        n = atoi(av[1]);
+    for (int i = 0; i < n; ++i)
+        lol();
+    return 0;
+}
+
+#define SALT_BYTES 16
+
+JellyfishReturnCode Jellyfish::addFile( std::string const &path )
+{
+    ULOG(INFO) << "Reading file.\n";
+    uint64_t size;
+    std::ifstream in(path, std::ios::in | std::ios::binary);
+    std::string contents;
+    if (in)
+    {
+        in.seekg(0, std::ios::end);
+        size = in.tellg();
+        contents.resize(size);
+        in.seekg(0, std::ios::beg);
+        in.read(&contents[0], contents.size());
+        in.close();
+    }
+
+    std::vector<std::string> parts;
+    std::vector<std::string> codes;
+    //getPartsCodes(content, &parts, &codes);
+
+    std::string salt = maidsafe::RandomString(SALT_BYTES);
+    std::string hash = crypto::Hash<crypto::SHA256>(salt + contents);
+
+    ULOG(INFO) << "Searching node.\n";
+    mk::Key key = getKey(tFileKey, hash);
+    std::vector<mk::Contact> contacts;
+    Synchronizer<std::vector<mk::Contact> > sync(contacts);
+    _jelly_node->node()->FindNodes(key, sync, 100);
+    sync.wait();
+    if (sync.result != mk::kSuccess && !contacts.size())
+        return jNoNodes;
+
+    bool success = false;
+    mk::Contact const *stored_on;
+    std::string iv = maidsafe::RandomString(crypto::AES256_IVSize);
+    for (mk::Contact const &contact: contacts)
+    {
+        if (success)
+            break;
+        ULOG(INFO) << "Trying: " << contact.node_id().ToStringEncoded(mk::NodeId::kBase64);
+        if (contact.node_id() == _jelly_node->node()->contact().node_id())
+            continue;
+        success = contactServer(contact, [&](JellyInternalClient &client)
+        {
+            std::string encrypted_contents = crypto::SymmDecrypt(contents, _user_data.aes256_key, iv);
+            ClientProof proof;
+            proof.user = _login;
+            JellyInternalStatus::type ret = client.prepareAddPart(hash, encrypted_contents.size(), proof);
+            if (ret != JellyInternalStatus::SUCCES)
+                return false;
+            ret = client.addPart(hash, encrypted_contents, proof);
+            if (ret != JellyInternalStatus::SUCCES)
+                return false;
+            StoredBlock block;
+            block.file_id = hash;
+            block.hash_id = hash;
+            block.size = size;
+            int store_result;
+            Synchronizer<int> sync_result(store_result);
+            _jelly_node->node()->Store(getKey(tClientParts, hash), serialize_cast<std::string>(block), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+            sync_result.wait();
+            if (store_result != mk::kSuccess)
+            {
+                client.removePart(key.ToStringEncoded(mk::Key::kBase64), proof);
+                return false;
+            }
+            stored_on = &contact;
+            ULOG(INFO) << "Found good node!";
+            return true;
+        });
+    }
+    if (!success)
+        return jAddError;
+    FileBlockInfo fp;
+    fp.node_id = stored_on->node_id().String();
+    fp.iv = iv;
+    fp.hash_id = hash;
+
+    File file;
+    file.real_parts = 1;
+    file.code_parts = 0;
+    file.hash = hash;
+    file.salt = salt;
+    file.size = size;
+    file.relative_path = path.c_str(); // TODO: make it a relative path...
+    file.blocks.push_back(fp);
+    int store_result;
+    Synchronizer<int> sync_result(store_result);
+    _jelly_node->node()->Store(getKey(tFile, hash), serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+    sync_result.wait();
+    if (store_result != mk::kSuccess)
+        return jDisconnected;
+    _jelly_node->node()->Store(getKey(tUserFiles, _login), hash, "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+    sync_result.wait();
+    if (store_result != mk::kSuccess)
+        return jDisconnected;
+    return jSuccess;
+}
+
+bool Jellyfish::contactServer(maidsafe::dht::Contact const &contact, boost::function<bool (JellyInternalClient &)> fct, bool raise, bool log)
+{
+    static FILE *nullfile;
+    if (!nullfile)
+        nullfile = fopen("/dev/null", "w");
+    FILE *err = stderr;
+    try
+    {
+        stderr = nullfile;
+        boost::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(contact.endpoint().ip.to_string(), contact.endpoint().port + 1));
+        boost::shared_ptr<apache::thrift::transport::TBufferedTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
+        boost::shared_ptr<apache::thrift::protocol::TBinaryProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
+        transport->open();
+        stderr = err;
+        JellyInternalClient client(protocol);
+        return fct(client);
+    }
+    catch (std::exception const &e)
+    {
+        stderr = err;
+        if (log)
+            ULOG(WARNING) << "Exeption in connecting server: " << e.what();
+        if (raise)
+            throw;
+        return false;
+    }
+    catch (...)
+    {
+        stderr = err;
+        if (raise)
+            throw;
+        return false;
+    }
+}
+
 #define UUID_BYTES (128/8)
 
 std::string Jellyfish::getNodeIdUser(std::string login)
@@ -219,63 +587,9 @@ std::string Jellyfish::getNodeIdUser(std::string login)
     return crypto::Hash<crypto::SHA512>(uuid);
 }
 
-// void Commands::FindValueCallback(FindValueReturns find_value_returns,
-//                                  std::string path) {
-//   if (find_value_returns.return_code != transport::kSuccess) {
-//     ULOG(ERROR) << "FindValue operation failed with return code: "
-//                 << find_value_returns.return_code
-//                 << " (" << ReturnCode2String(mk::ReturnCode(find_value_returns.return_code)) << ")";
-//   } else {
-//     ULOG(INFO)
-//         << boost::format("FindValue returned: %1% value(s), %2% closest "
-//                          "contact(s).") %
-//                          find_value_returns.values_and_signatures.size() %
-//                          find_value_returns.closest_nodes.size();
-//     if (find_value_returns.cached_copy_holder.node_id().String() !=
-//         kZeroId) {
-//       ULOG(INFO)
-//           << boost::format(
-//                  "Node holding a cached copy of the value: [ %1% ]")
-//                  % find_value_returns.cached_copy_holder.node_id().
-//                  ToStringEncoded(NodeId::kBase64);
-//     }
-//     if (find_value_returns.needs_cache_copy.node_id().String() !=
-//         kZeroId) {
-//       ULOG(INFO)
-//           << boost::format("Node needing a cache copy of the values: [ %1% ]")
-//                 % find_value_returns.needs_cache_copy.node_id().
-//                 ToStringEncoded(NodeId::kBase64);
-//     }
-//     // Writing only 1st value
-//     if (!find_value_returns.values_and_signatures.empty()) {
-//       if (path.empty()) {
-//         std::string value(find_value_returns.values_and_signatures[0].first);
-//         ULOG(INFO) << "Value: " << value;
-//       } else {
-//         WriteFile(path, find_value_returns.values_and_signatures[0].first);
-//       }
-//     }
-//   }
-//   demo_node_->asio_service().post(mark_results_arrived_);
-// }
-
 mk::Key Jellyfish::getKey(Jellyfish::Table t, std::string const &key)
 {
-    std::string table_name;
-    switch (t)
-    {
-        case tUser:
-            table_name = "user";
-            break;
-        case tStorage:
-            table_name = "storage";
-            break;
-        case tFile:
-            table_name = "file";
-            break;
-        default:
-            throw std::runtime_error("Bad table in DHT: " + boost::lexical_cast<std::string>(t));
-    }
+    std::string table_name = Table2String(t);
     return mk::Key(crypto::Hash<crypto::SHA512>(table_name + std::string(":") + key));
 }
 
@@ -289,15 +603,14 @@ JellyfishReturnCode Jellyfish::initStorage( std::string const &path, uint64_t si
 
     ULOG(INFO) << "Storing storage data.\n";
     _storage_data.size = ((uint64_t)1) << size;
-    _storage_data.path = path;
+    _storage_path = path;
     int result;
     Synchronizer<int> sync(result);
-    _jelly_node->node()->Store(getKey(tStorage, _keys->identity), serialize_cast<std::string>(_storage_data), "", boost::posix_time::pos_infin, PrivateKeyPtr(new asymm::PrivateKey(_keys->private_key)), sync);
+    _jelly_node->node()->Store(getKey(tStorage, _keys->identity), serialize_cast<std::string>(_storage_data), "", boost::posix_time::pos_infin, _private_key_ptr, sync);
     sync.wait();
     if (result != mt::kSuccess)
     {
         _storage_data.size = 0;
-        _storage_data.path = "";
         return jCouldNotStore;
     }
     return jSuccess;
@@ -305,83 +618,27 @@ JellyfishReturnCode Jellyfish::initStorage( std::string const &path, uint64_t si
 
 JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, long long size, ClientProof const &client )
 {
-    ULOG(INFO) << "localPrepareAdd(" << id << ", " << size << ", " << client.user << ")";
+    ULOG(INFO) << "localPrepareAdd(" << maidsafe::EncodeToHex(id) << ", " << size << ", " << client.user << ")";
     return JellyInternalStatus::SUCCES;
 }
 
 JellyInternalStatus::type Jellyfish::localAdd( std::string const & id, std::string const & file, ClientProof const &client )
 {
-    ULOG(INFO) << "localAdd(" << id << ", " << file << ", " << client.user << ")";
+    ULOG(INFO) << "localAdd(" << maidsafe::EncodeToHex(id) << ", " << maidsafe::EncodeToBase64(file) << ", " << client.user << ")";
     return JellyInternalStatus::SUCCES;
 }
 
 JellyInternalStatus::type Jellyfish::localRemove( std::string const & id, ClientProof const & client )
 {
-    ULOG(INFO) << "localRemove(" << id << ", " << client.user << ")";
+    ULOG(INFO) << "localRemove(" << maidsafe::EncodeToHex(id) << ", " << client.user << ")";
     return JellyInternalStatus::SUCCES;
 }
 
 void Jellyfish::hashPart( HashStatus &res, std::string const & id, std::string const & salt, ClientProof const & client )
 {
-    ULOG(INFO) << "hashPart(" << id << ", " << maidsafe::EncodeToBase64(salt) << ", " << client.user << ")";
+    ULOG(INFO) << "hashPart(" << maidsafe::EncodeToHex(id) << ", " << maidsafe::EncodeToBase64(salt) << ", " << client.user << ")";
     res.status = JellyInternalStatus::SUCCES;
 }
-
-JellyfishReturnCode Jellyfish::addFile( std::string const &path )
-{
-    ULOG(INFO) << "Reading file.\n";
-    std::ifstream in(path, std::ios::in | std::ios::binary);
-    std::string contents;
-    if (in)
-    {
-        in.seekg(0, std::ios::end);
-        contents.resize(in.tellg());
-        in.seekg(0, std::ios::beg);
-        in.read(&contents[0], contents.size());
-        in.close();
-    }
-    std::string hash = crypto::Hash<crypto::SHA512>(_login + contents);
-
-    ULOG(INFO) << "Searching node.\n";
-    mk::Key key = getKey(tFile, hash);
-    std::vector<mk::Contact> contacts;
-    Synchronizer<std::vector<mk::Contact> > sync(contacts);
-    _jelly_node->node()->FindNodes(key, sync, 100);
-    sync.wait();
-    if (sync.result != mk::kSuccess && !contacts.size())
-        return jNoNodes;
-
-    bool success = false;
-    for (mk::Contact const &contact: contacts)
-    {
-        try
-        {
-            ULOG(INFO) << contact.node_id().ToStringEncoded(mk::NodeId::kBase64);
-            if (contact.node_id() == _jelly_node->node()->contact().node_id())
-                continue;
-	        boost::shared_ptr<apache::thrift::transport::TSocket> socket(new apache::thrift::transport::TSocket(contact.endpoint().ip.to_string(), contact.endpoint().port + 1));
-	        boost::shared_ptr<apache::thrift::transport::TBufferedTransport> transport(new apache::thrift::transport::TBufferedTransport(socket));
-	        boost::shared_ptr<apache::thrift::protocol::TBinaryProtocol> protocol(new apache::thrift::protocol::TBinaryProtocol(transport));
-            transport->open();
-	        JellyInternalClient client(protocol);
-	        ClientProof proof;
-	        proof.user = _login;
-	        JellyInternalStatus::type ret = client.prepareAddPart(key.ToStringEncoded(mk::Key::kBase64), contents.size(), proof);
-	        if (ret != JellyInternalStatus::SUCCES)
-	            continue;
-	        ret = client.addPart(key.ToStringEncoded(mk::Key::kBase64), contents, proof);
-	        if (ret != JellyInternalStatus::SUCCES)
-	            continue;
-	        success = true;
-        }
-        catch (...)
-        {}
-    }
-    if (!success)
-        return jAddError;
-    return jSuccess;
-}
-
 void PrintNodeInfo(const mk::Contact &contact) {
     ULOG(INFO)
     << boost::format("Node ID:   %1%")
@@ -461,6 +718,46 @@ void PrintNodeInfo(const mk::Contact &contact) {
 //       return demo_node_->asio_service().post(mark_results_arrived_);
 //     }
 //   }
+
+// void Commands::FindValueCallback(FindValueReturns find_value_returns,
+//                                  std::string path) {
+//   if (find_value_returns.return_code != transport::kSuccess) {
+//     ULOG(ERROR) << "FindValue operation failed with return code: "
+//                 << find_value_returns.return_code
+//                 << " (" << ReturnCode2String(mk::ReturnCode(find_value_returns.return_code)) << ")";
+//   } else {
+//     ULOG(INFO)
+//         << boost::format("FindValue returned: %1% value(s), %2% closest "
+//                          "contact(s).") %
+//                          find_value_returns.values_and_signatures.size() %
+//                          find_value_returns.closest_nodes.size();
+//     if (find_value_returns.cached_copy_holder.node_id().String() !=
+//         kZeroId) {
+//       ULOG(INFO)
+//           << boost::format(
+//                  "Node holding a cached copy of the value: [ %1% ]")
+//                  % find_value_returns.cached_copy_holder.node_id().
+//                  ToStringEncoded(NodeId::kBase64);
+//     }
+//     if (find_value_returns.needs_cache_copy.node_id().String() !=
+//         kZeroId) {
+//       ULOG(INFO)
+//           << boost::format("Node needing a cache copy of the values: [ %1% ]")
+//                 % find_value_returns.needs_cache_copy.node_id().
+//                 ToStringEncoded(NodeId::kBase64);
+//     }
+//     // Writing only 1st value
+//     if (!find_value_returns.values_and_signatures.empty()) {
+//       if (path.empty()) {
+//         std::string value(find_value_returns.values_and_signatures[0].first);
+//         ULOG(INFO) << "Value: " << value;
+//       } else {
+//         WriteFile(path, find_value_returns.values_and_signatures[0].first);
+//       }
+//     }
+//   }
+//   demo_node_->asio_service().post(mark_results_arrived_);
+// }
 
 //   Key key(std::string(args.at(0)), NodeId::kBase64);
 //   if (!key.IsValid())
