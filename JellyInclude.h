@@ -1,11 +1,11 @@
 #pragma once
 
-#include "jellutils/pipe_link.h"
-#include "jellutils/crypt.h"
-
 #include "maidsafe/common/rsa.h"
 #include "maidsafe/common/utils.h"
 #include "maidsafe/common/log.h"
+
+#include "jellutils/pipe_link.h"
+#include "jellutils/crypt.h"
 
 #include "thrift/transport/TServerSocket.h"
 #include "thrift/transport/TSocket.h"
