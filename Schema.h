@@ -2,6 +2,8 @@
 
 #include "JellyInclude.h"
 
+#include "jellutils/enum.h"
+
 MAKE_ENUM(Table,
           (tUser)
           (tFile)

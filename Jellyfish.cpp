@@ -4,6 +4,10 @@
 
 #include "Jellyfish.h"
 
+#ifdef __APPLE__
+#define aligned_alloc(a, b) malloc(b)
+#endif
+
 namespace mt = maidsafe::transport;
 namespace asymm = maidsafe::rsa;
 namespace crypto = maidsafe::crypto;
@@ -741,7 +745,7 @@ bool Jellyfish::storeFileData( File &file )
         sync_result.wait();
         if (store_result != mk::kSuccess)
         {
-            ULOG(WARNING) << "Connection error (1): " << mk::ReturnCode2String((mk::ReturnCode) store_result);
+	  //            ULOG(WARNING) << "Connection error (1): " << mk::ReturnCode2String((mk::ReturnCode) store_result);
             return false;
         }
     }
@@ -752,7 +756,7 @@ bool Jellyfish::storeFileData( File &file )
         sync_result.wait();
         if (store_result != mk::kSuccess)
         {
-            ULOG(WARNING) << "Connection error (2): " << mk::ReturnCode2String((mk::ReturnCode) store_result);
+	  //            ULOG(WARNING) << "Connection error (2): " << mk::ReturnCode2String((mk::ReturnCode) store_result);
             return false;
         }
     }
