@@ -25,28 +25,11 @@ TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "JellyInclude.h"
+
 #include "Commands.h"
 
 #include <iostream>  // NOLINT
-
-#include "boost/format.hpp"
-#include "boost/filesystem.hpp"
-#ifdef __MSVC__
-#  pragma warning(push)
-#  pragma warning(disable: 4127)
-#endif
-#include "boost/tokenizer.hpp"
-#ifdef __MSVC__
-#  pragma warning(pop)
-#endif
-#include "boost/lexical_cast.hpp"
-#include "maidsafe/common/crypto.h"
-#include "maidsafe/common/utils.h"
-
-#include "maidsafe/common/log.h"
-#include "maidsafe/dht/contact.h"
-#include "maidsafe/dht/node_id.h"
-#include "maidsafe/dht/node-api.h"
 
 namespace args = std::placeholders;
 namespace fs = boost::filesystem;

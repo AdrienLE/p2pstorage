@@ -1,9 +1,9 @@
 #pragma once
 
-#include "thrift/server/TThreadPoolServer.h"
-#include "maidsafe/common/utils.h"
-#include "maidsafe/common/log.h"
-#include "maidsafe/common/crypto.h"
+#include "JellyInclude.h"
+
+#include "Schema.h"
+#include "FilesStore.h"
 #include "JellyfishNode.h"
 #include "JellyfishConfig.h"
 #include "jellutils/enum.h"
@@ -22,119 +22,43 @@ MAKE_ENUM(JellyfishReturnCode,
           (jFileSystemError)
           (jNoNodes)
           (jAddError)
-          (jDisconnected)) // We should make it as unlikely as possible that this will occur.
+          (jDisconnected) // We should make it as unlikely as possible that this will occur.
+          (jFileNotFound))
 
 namespace mk = maidsafe::dht;
 
 void PrintNodeInfo(const mk::Contact &contact);
 
+class FilesStore;
+
 // This class is synchronous but should be thread safe as well.
 class Jellyfish
 {
 public:
-    Jellyfish(JellyfishConfig const &config) : _jelly_conf(config), _logged_in(false) {}
+    Jellyfish(JellyfishConfig const &config) : _jelly_conf(config), _logged_in(false)
+    {
+    }
+    ~Jellyfish()
+    {
+    }
     
     JellyfishReturnCode login(std::string const &login, std::string const &password);
     JellyfishReturnCode createAccount(std::string const &login, std::string const &password);
     JellyfishReturnCode initStorage(std::string const &path, uint64_t size);
     JellyfishReturnCode addFile(std::string const &path);
-    void runInitNode(boost::filesystem::path const &bootstrap_file_path);
+    __attribute__((noreturn)) void runInitNode(boost::filesystem::path const &bootstrap_file_path);
     
     std::string const &login() const { return _login; }
-    
-    struct UserData
-    {
-        std::string salt;
-        uint32_t pin;
-        std::string public_key;
-        std::string private_key;
-        std::string aes256_key;
-        
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned int version)
-        {
-            ar & salt;
-            ar & pin;
-            ar & public_key;
-            ar & private_key;
-            ar & aes256_key;
-        }
-    };
-
-    struct StorageData
-    {
-        StorageData() : size(0) {}
-        uint64_t size;
-
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned version)
-        {
-            ar & size;
-        }
-    };
-
-    struct FileBlockInfo
-    {
-        std::string iv;
-        std::string hash_id;
-        std::string node_id; // Can be compressed by storing the first few bytes.
-
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned version)
-        {
-            ar & iv;
-            ar & hash_id;
-            ar & node_id;
-        }
-    };
-
-    struct StoredBlock
-    {
-        std::string file_id;
-        std::string hash_id;
-        uint32_t size;
-
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned version)
-        {
-            ar & file_id;
-            ar & hash_id;
-            ar & size;
-        }
-    };
-
-    struct File
-    {
-        std::string relative_path;
-        std::string salt;
-        std::string hash;
-        uint64_t size;
-        uint16_t real_parts;
-        uint16_t code_parts;
-        std::vector<FileBlockInfo> blocks;
-
-        template<class Archive>
-        void serialize(Archive & ar, const unsigned version)
-        {
-            ar & relative_path;
-            ar & salt;
-            ar & hash;
-            ar & size;
-            ar & real_parts;
-            ar & code_parts;
-            ar & blocks;
-        }
-    };
 
     JellyInternalStatus::type localPrepareAdd(std::string const &id, long long size, ClientProof const &client);
-    JellyInternalStatus::type localAdd(std::string const &id, std::string const &file, ClientProof const &client);
+    JellyInternalStatus::type localAdd(std::string const &salt, std::string const &id, std::string const &file, ClientProof const &client);
     JellyInternalStatus::type localRemove(std::string const &id, ClientProof const &client);
     void hashPart(HashStatus &res, std::string const &id, std::string const &salt, ClientProof const &client);
     
     static void getPartsCodes(std::istream &content, uint64_t size, int n_parts, int n_codes, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes);
     static bool getContentFromCodes(std::vector<std::istream *> in, std::vector<int> position, int n_parts, int n_codes, uint64_t size, std::ostream &out);
 
-    static uint64_t encodeFile(std::string const &iv, std::string const &key, std::string const &filename_in, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes);
+    static uint64_t encodeFile(std::string const &iv, std::string const &key, const char *filename, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes, boost::function<bool (uint64_t size)> big_callback, boost::function<bool (const char *, uint64_t)> small_callback);
     static bool decodeFile(std::string const &iv, std::string const &key, std::vector<std::istream *> const &in, std::vector<int> const &positions, uint64_t size, std::string const &filename_out);
 
 protected:
@@ -148,26 +72,25 @@ protected:
     mk::PrivateKeyPtr _private_key_ptr;
     std::string _login;
     UserData _user_data;
-    StorageData _storage_data;
-    std::string _storage_path;
     bool _logged_in;
     boost::shared_ptr<boost::thread> _server_thread;
     boost::shared_ptr<apache::thrift::server::TThreadPoolServer> _server;
     boost::mutex _wait_mutex;
     typedef boost::mutex::scoped_lock scoped_lock;
+
+    boost::shared_ptr<FilesStore> _files_store;
+    std::string _config_path;
     
-    MAKE_ENUM(Table,
-        (tUser)
-        (tFile)
-        (tStorage)
-        (tFileKey)
-        (tClientParts)
-        (tUserFiles))
-    
-    maidsafe::dht::Key getKey(Table table, std::string const &key);
+    static maidsafe::dht::Key getKey(Table table, std::string const &key);
     std::string getNodeIdUser(std::string login);
     void startServer();
     bool contactServer(maidsafe::dht::Contact const &contact, boost::function<bool (JellyInternalClient &)> fct, bool raise = false, bool log = false);
+
+    bool addBigFile(File &file, uint64_t size, std::vector<std::string> const &parts, std::vector<std::string> const &codes);
+
+    bool storeFileData( File &file );
+
+    bool addSmallFile(File &file, const char *filename, uint64_t size);
     
     template<class Type>
     class Synchronizer

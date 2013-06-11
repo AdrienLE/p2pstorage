@@ -25,32 +25,7 @@
  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <signal.h>
-#include "boost/filesystem.hpp"
-#include "boost/program_options.hpp"
-
-#ifndef __APPLE__
-#include "maidsafe/common/breakpad.h"
-#endif
-#include "maidsafe/common/crypto.h"
-#include "maidsafe/common/utils.h"
-
-#ifdef __MSVC__
-#  pragma warning(push)
-#  pragma warning(disable: 4127 4244 4267)
-#endif
-#ifdef __MSVC__
-#  pragma warning(pop)
-#endif
-#include "maidsafe/dht/config.h"
-#include "maidsafe/dht/contact.h"
-#include "maidsafe/dht/node-api.h"
-#include "maidsafe/dht/node_container.h"
-#include "maidsafe/dht/node_id.h"
-#include "maidsafe/dht/return_codes.h"
-#include "maidsafe/dht/version.h"
-
-#include "maidsafe/common/log.h"
+#include "JellyInclude.h"
 
 #include "Commands.h"
 #include "Jellyfish.h"

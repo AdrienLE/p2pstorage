@@ -1,45 +1,8 @@
-#include "Jellyfish.h"
-
-#include "maidsafe/common/rsa.h"
-#include "maidsafe/common/utils.h"
-#include "maidsafe/common/log.h"
+#include "JellyInclude.h"
 
 #include "JellyfishInternal.h"
-#include "gen-cpp/JellyInternal.h"
 
-#include "jellutils/pipe_link.h"
-
-#include "thrift/transport/TServerSocket.h"
-#include "thrift/transport/TSocket.h"
-#include "thrift/protocol/TBinaryProtocol.h"
-#include "thrift/transport/TBufferTransports.h"
-#include "thrift/concurrency/PosixThreadFactory.h"
-
-extern "C"
-{
-#include "jerasure/jerasure.h"
-#include "jerasure/cauchy.h"
-};
-
-#include "cryptopp/gzip.h"
-#include "cryptopp/hex.h"
-#include "cryptopp/aes.h"
-#include "cryptopp/modes.h"
-#include "cryptopp/osrng.h"
-#include "cryptopp/pssr.h"
-#include  "cryptopp/ida.h"
-#include "cryptopp/pwdbased.h"
-#include "cryptopp/cryptlib.h"
-
-#include <boost/lexical_cast.hpp>
-#include <boost/format.hpp>
-#include <boost/shared_array.hpp>
-#include <boost/timer/timer.hpp>
-#include <unistd.h>
-#include <pwd.h>
-#include <exception>
-#include <sstream>
-#include <fstream>
+#include "Jellyfish.h"
 
 namespace mt = maidsafe::transport;
 namespace asymm = maidsafe::rsa;
@@ -82,7 +45,7 @@ JellyfishReturnCode Jellyfish::createAccount(std::string const &login, std::stri
     asymm::GenerateKeyPair(&keys);
     UserData user_data;
     user_data.pin = rand();
-    user_data.salt = maidsafe::RandomString(16);
+    user_data.salt = SRandString(16);
     std::string crypt_key_iv;
     crypto::SecurePassword(password, user_data.salt, user_data.pin, &crypt_key_iv);
     std::string iv = crypt_key_iv.substr(0, crypto::AES256_IVSize);
@@ -92,7 +55,7 @@ JellyfishReturnCode Jellyfish::createAccount(std::string const &login, std::stri
     user_data.private_key = crypto::SymmEncrypt(privat, crypt_key, iv);
     asymm::EncodePublicKey(keys.public_key, &publi);
     user_data.public_key = publi;
-    std::string aes_key = maidsafe::RandomString(crypto::AES256_KeySize);
+    std::string aes_key = SRandString(crypto::AES256_KeySize);
     asymm::Encrypt(aes_key, keys.public_key, &user_data.aes256_key);
     std::string value = serialize_cast<std::string>(user_data);
 
@@ -184,6 +147,14 @@ void Jellyfish::startServer()
         _server->stop();
         _server_thread->join();
     }
+    mk::FindValueReturns returns;
+    Synchronizer<mk::FindValueReturns> sync(returns);
+    _jelly_node->node()->FindValue(getKey(tStorage, _keys->identity), _private_key_ptr, sync);
+    sync.wait();
+    if (sync.result == mk::kSuccess && returns.values_and_signatures.size() == 1)
+    {
+        _files_store.reset(new FilesStore(serialize_cast<StorageData>(returns.values_and_signatures[0].first)));
+    }
     boost::condition_variable condvar;
     int port = _jelly_node->node()->contact().endpoint().port;
     _server_thread.reset(new boost::thread([&]()
@@ -218,9 +189,9 @@ void Jellyfish::startServer()
 
 static int getPacketSize(uint64_t size, int n_parts)
 {
-    int min = OPTIMAL_PACKET_SIZE;
-    int minpacketsize = OPTIMAL_PACKET_SIZE;
-    for (int packetsize = minpacketsize; packetsize > 8 && packetsize > size / 1000; --packetsize)
+    unsigned min = OPTIMAL_PACKET_SIZE;
+    unsigned minpacketsize = OPTIMAL_PACKET_SIZE;
+    for (unsigned packetsize = minpacketsize; packetsize > 8 && packetsize > size / 1000; --packetsize)
     {
         if ((size < n_parts*W*packetsize*8 || size % (n_parts*W*packetsize*8) + minpacketsize - packetsize) < min && packetsize % 8 == 0)
         {
@@ -313,7 +284,7 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
     for (uint64_t total_size = 0; total_size < real_size; )
     {
         memset(buffer.get(), 0, packetsize * 8 * W * total_parts);
-        for (int i = 0; i < position.size(); ++i)
+        for (unsigned i = 0; i < position.size(); ++i)
         {
             int pos = position[i];
             in[i]->read((pos < n_parts) ? data[position[i]] : codes[position[i] - n_parts], packetsize * 8 * W);
@@ -336,17 +307,17 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
 
 #define N_PARTS 5
 #define N_CODES 5
+#define THRESHOLD 100000
 
-uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, std::string const &filename_in, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes)
+uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, const char *filename_in, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes, boost::function<bool (uint64_t size)> big_callback, boost::function<bool (const char *, uint64_t)> small_callback)
 {
     if (key.size() < crypto::AES256_KeySize || iv.size() < crypto::AES256_IVSize)
     {
         DLOG(WARNING) << "Undersized key or IV";
-        return -1; // TODO: return false
+        return -1;
     }
     bool success_a = true, success_b = true;
     uint64_t size;
-    // TODO: Problem: what if compressed file is small enough to be stored directly?
     pipe_link(
         [&](const char *filename)
     {
@@ -360,10 +331,15 @@ uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, st
                 new CryptoPP::ArraySink(biv, sizeof(biv)));
 
             CryptoPP::CFB_Mode<CryptoPP::AES>::Encryption encryptor(bkey, sizeof(bkey), biv);
-            CryptoPP::FileSource(filename_in.c_str(), true,
+            CryptoPP::FileSource(filename_in, true,
                 new CryptoPP::Gzip(
                 new CryptoPP::StreamTransformationFilter(encryptor,
                 new CryptoPP::FileSink(filename)), 9));
+        }
+        catch (std::exception const &e)
+        {
+            ULOG(WARNING) << "Exception: " << e.what();
+            success_a = false;
         }
         catch (...)
         {
@@ -372,17 +348,30 @@ uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, st
     },
         [&](const char *filename)
     {
+        printf("there %s\n", filename);
         std::ifstream f(filename);
         if (f)
         {
             f.seekg(0, std::ios::end);
             size = f.tellg();
+            f.clear();
             f.seekg(0, std::ios::beg);
         }
-        Jellyfish::getPartsCodes(f, size, N_PARTS, N_CODES, parts, codes);
+        printf("size %lu\n", size);
+        if (size > THRESHOLD)
+        {
+            Jellyfish::getPartsCodes(f, size, N_PARTS, N_CODES, parts, codes);
+            f.close();
+            success_b = big_callback(size);
+        }
+        else
+        {
+            f.close();
+            success_b = small_callback(filename, size);
+        }
     }, true);
     if (!success_a || !success_b)
-        return -1;//TODO: return success_a && success_b;
+        return -1;
     return size;
 }
 
@@ -427,126 +416,43 @@ bool Jellyfish::decodeFile(std::string const &iv, std::string const &key, std::v
     return success_a && success_b;
 }
 
-int main2()
-{
-    //{
-    //    std::string r = maidsafe::RandomString(10000);
-    //    std::ofstream f("a");
-    //    f.write(r.c_str(), r.size());
-    //}
-    std::string k = maidsafe::RandomString(crypto::AES256_KeySize), iv = maidsafe::RandomString(crypto::AES256_IVSize);
-    std::vector<std::ostream *> parts, codes;
-    for (int i = 0; i < 5; ++i)
-    {
-        parts.push_back(new std::ofstream(std::string("k_") + boost::lexical_cast<std::string>(i)));
-        codes.push_back(new std::ofstream(std::string("m_") + boost::lexical_cast<std::string>(i)));
-    }
-    uint64_t size = Jellyfish::encodeFile(iv, k, "kjvdat.txt", parts, codes);
-    std::vector<int> positions;
-    for (int i = 0; i < 5; ++i)
-    {
-        int r;
-        while (true)
-        {
-            r = rand() % 10;
-            bool cont = false;
-            for (int p: positions)
-                if (r == p)
-                    cont = true;
-            if (!cont)
-                break;
-        }
-        positions.push_back(r);
-    }
-    std::sort(positions.begin(), positions.end());
-    std::vector<std::istream *> data;
-    for (int i = 0; i < 5; ++i)
-    {
-        data.push_back(new std::ifstream(std::string((positions[i] < N_PARTS) ? "k_" : "m_") +
-            boost::lexical_cast<std::string>((positions[i] < N_PARTS) ? positions[i] : positions[i] - N_PARTS)));
-    }
-    Jellyfish::decodeFile(iv, k, data, positions, size, "b");
-}
-
 #define SALT_BYTES 16
 
 JellyfishReturnCode Jellyfish::addFile( std::string const &path )
 {
-    ULOG(INFO) << "Reading file.\n";
+    ULOG(INFO) << "Reading file and getting hash.";
+    std::string salt = SRandString(SALT_BYTES);
+    std::string hash;
     uint64_t size;
-    std::ifstream in(path, std::ios::in | std::ios::binary);
-    std::string contents;
+    std::ifstream in(path);
     if (in)
     {
         in.seekg(0, std::ios::end);
         size = in.tellg();
-        contents.resize(size);
+        in.clear();
         in.seekg(0, std::ios::beg);
-        in.read(&contents[0], contents.size());
-        in.close();
+        hash = HashSalt<crypto::SHA256>(salt, in);
+        ULOG(INFO) << "Hash: " << maidsafe::EncodeToBase64(hash);
+        in.clear();
+        in.seekg(0, std::ios::beg);
     }
-
-    std::vector<std::string> parts;
-    std::vector<std::string> codes;
-    //getPartsCodes(content, &parts, &codes);
-
-    std::string salt = maidsafe::RandomString(SALT_BYTES);
-    std::string hash = crypto::Hash<crypto::SHA256>(salt + contents);
-
-    ULOG(INFO) << "Searching node.\n";
-    mk::Key key = getKey(tFileKey, hash);
-    std::vector<mk::Contact> contacts;
-    Synchronizer<std::vector<mk::Contact> > sync(contacts);
-    _jelly_node->node()->FindNodes(key, sync, 100);
-    sync.wait();
-    if (sync.result != mk::kSuccess && !contacts.size())
-        return jNoNodes;
-
-    bool success = false;
-    mk::Contact const *stored_on;
-    std::string iv = maidsafe::RandomString(crypto::AES256_IVSize);
-    for (mk::Contact const &contact: contacts)
+    else
     {
-        if (success)
-            break;
-        ULOG(INFO) << "Trying: " << contact.node_id().ToStringEncoded(mk::NodeId::kBase64);
-        if (contact.node_id() == _jelly_node->node()->contact().node_id())
-            continue;
-        success = contactServer(contact, [&](JellyInternalClient &client)
-        {
-            std::string encrypted_contents = crypto::SymmDecrypt(contents, _user_data.aes256_key, iv);
-            ClientProof proof;
-            proof.user = _login;
-            JellyInternalStatus::type ret = client.prepareAddPart(hash, encrypted_contents.size(), proof);
-            if (ret != JellyInternalStatus::SUCCES)
-                return false;
-            ret = client.addPart(hash, encrypted_contents, proof);
-            if (ret != JellyInternalStatus::SUCCES)
-                return false;
-            StoredBlock block;
-            block.file_id = hash;
-            block.hash_id = hash;
-            block.size = size;
-            int store_result;
-            Synchronizer<int> sync_result(store_result);
-            _jelly_node->node()->Store(getKey(tClientParts, hash), serialize_cast<std::string>(block), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
-            sync_result.wait();
-            if (store_result != mk::kSuccess)
-            {
-                client.removePart(key.ToStringEncoded(mk::Key::kBase64), proof);
-                return false;
-            }
-            stored_on = &contact;
-            ULOG(INFO) << "Found good node!";
-            return true;
-        });
+        ULOG(WARNING) << "File not found\n";
+        return jFileNotFound;
     }
-    if (!success)
-        return jAddError;
-    FileBlockInfo fp;
-    fp.node_id = stored_on->node_id().String();
-    fp.iv = iv;
-    fp.hash_id = hash;
+    ULOG(INFO) << "Encoding file.";
+    std::vector<std::string> to_remove;
+    auto newTemporaryStream = [&]()
+    {
+        std::string filename = std::string("/tmp/filepart_") + maidsafe::EncodeToBase32(SRandString(16));
+        to_remove.push_back(filename);
+        return new std::fstream(filename.c_str(), std::fstream::in | std::fstream::out | std::fstream::trunc | std::fstream::binary);
+    };
+    std::vector<std::ostream *> parts;
+    std::generate_n(std::back_inserter(parts), N_PARTS, newTemporaryStream);
+    std::vector<std::ostream *> codes;
+    std::generate_n(std::back_inserter(codes), N_CODES, newTemporaryStream);
 
     File file;
     file.real_parts = 1;
@@ -554,19 +460,139 @@ JellyfishReturnCode Jellyfish::addFile( std::string const &path )
     file.hash = hash;
     file.salt = salt;
     file.size = size;
+    file.iv = SRandString(crypto::AES256_IVSize);
     file.relative_path = path.c_str(); // TODO: make it a relative path...
-    file.blocks.push_back(fp);
-    int store_result;
-    Synchronizer<int> sync_result(store_result);
-    _jelly_node->node()->Store(getKey(tFile, hash), serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
-    sync_result.wait();
-    if (store_result != mk::kSuccess)
-        return jDisconnected;
-    _jelly_node->node()->Store(getKey(tUserFiles, _login), hash, "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
-    sync_result.wait();
-    if (store_result != mk::kSuccess)
-        return jDisconnected;
+
+    uint64_t stored_size = encodeFile(file.iv, _user_data.aes256_key, path.c_str(), parts, codes,
+        [&](uint64_t sz)
+    {
+        std::vector<std::string> p;
+        std::vector<std::string> c;
+        for (unsigned i = 0; i < parts.size(); ++i)
+            p.push_back(to_remove[i]);
+        for (unsigned i = 0; i < codes.size(); ++i)
+            c.push_back(to_remove[parts.size() + i]);
+        return addBigFile(file, sz, p, c);
+    },
+        [&](const char *filename, uint64_t sz){return addSmallFile(file, filename, sz);});
+    for (std::string const &fname: to_remove)
+        unlink(fname.c_str());
+    if (stored_size == (uint64_t)-1)
+        return jAddError; // TODO: find a way to return a more precise error
     return jSuccess;
+}
+
+bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> const &parts, std::vector<std::string> const &codes)
+{
+    ULOG(INFO) << "Adding file bigger than " << THRESHOLD/1000 << "KB";
+    ULOG(INFO) << "Searching node.";
+    std::vector<std::string> data;
+    for (std::string const &p: parts)
+        data.push_back(p);
+    for (std::string const &p: codes)
+        data.push_back(p);
+
+    ClientProof proof;
+    proof.user = _login;
+
+    for (std::string const &filename: data)
+    {
+        std::ifstream block(filename.c_str());
+        block.seekg(0, std::ios::end);
+        uint64_t size_part = block.tellg();
+        printf("total_size %lu\n", size_part);
+        block.clear();
+        block.seekg(0, std::ios::beg);
+        std::string hash = HashSalt<crypto::SHA256>(file.salt, block);
+        block.clear();
+        block.seekg(0, std::ios::beg);
+        std::string content;
+        content.resize(size_part);
+        block.read(&content[0], size_part);
+
+        mk::Key key = getKey(tFileKey, hash);
+        std::vector<mk::Contact> contacts;
+        Synchronizer<std::vector<mk::Contact> > sync(contacts);
+        _jelly_node->node()->FindNodes(key, sync, 100);
+        sync.wait();
+        if (sync.result != mk::kSuccess && !contacts.size())
+        {
+            ULOG(WARNING) << "Could not find node.";
+            return false;
+        }
+
+        mk::Contact const *stored_on = 0;
+        for (mk::Contact const &contact: contacts)
+        {
+            if (stored_on)
+                break;
+            ULOG(INFO) << "Trying: " << contact.node_id().ToStringEncoded(mk::NodeId::kBase64);
+            if (contact.node_id() == _jelly_node->node()->contact().node_id())
+                continue;
+            if (contactServer(contact, [&](JellyInternalClient &client)
+            {
+                JellyInternalStatus::type ret = client.prepareAddPart(hash, size_part, proof);
+                if (ret != JellyInternalStatus::SUCCES)
+                    return false;
+                ret = client.addPart(file.salt, hash, content, proof);
+                if (ret != JellyInternalStatus::SUCCES)
+                    return false;
+
+                FileBlockInfo info;
+                info.hash_id = hash;
+                info.node_id = contact.node_id().String();
+                file.blocks.push_back(info);
+
+                StoredBlock stored_block;
+                stored_block.salt = file.salt;
+                stored_block.hash_id = hash;
+                stored_block.size = size_part;
+
+                int store_result;
+                Synchronizer<int> sync_result(store_result);
+                _jelly_node->node()->Store(getKey(tStoredBlocks, contact.node_id().String()),
+                    serialize_cast<std::string>(stored_block), "", boost::posix_time::pos_infin,
+                    PrivateKeyPtr(), sync_result);
+                sync_result.wait();
+                if (store_result != mk::kSuccess)
+                {
+                    client.removePart(hash, proof);
+                    return false;
+                }
+                ULOG(INFO) << "Found good node!";
+                return true;
+            }))
+                stored_on = &contact;
+        }
+        if (!stored_on)
+        {
+            ULOG(WARNING) << "Didn't find node to store file.\n";
+            // TODO: remove previous parts!!!
+            return false;
+        }
+    }
+
+    return storeFileData(file);
+}
+
+bool Jellyfish::addSmallFile(File &file, const char *filename, uint64_t size)
+{
+    ULOG(INFO) << "Adding file smaller than " << THRESHOLD/1000 << "KB";
+    file.in_dht = true;
+    std::string to_store;
+    to_store.resize(size);
+    std::ifstream f(filename);
+    f.read(&to_store[0], size);
+    int result;
+    Synchronizer<int> sync(result);
+    _jelly_node->node()->Store(getKey(tFullFile, file.hash), to_store, "", boost::posix_time::pos_infin, _private_key_ptr, sync);
+    sync.wait();
+    if (result != mk::kSuccess)
+    {
+        ULOG(WARNING) << "Connection error!";
+        return false;
+    }
+    return storeFileData(file);
 }
 
 bool Jellyfish::contactServer(maidsafe::dht::Contact const &contact, boost::function<bool (JellyInternalClient &)> fct, bool raise, bool log)
@@ -625,20 +651,23 @@ std::string Jellyfish::getNodeIdUser(std::string login)
     config_path += "/.jellyfish/";
     config_path += login;
     boost::filesystem::create_directories(config_path);
+    _config_path = config_path;
     config_path += "/device_id";
     std::ifstream f(config_path);
     std::string uuid;
     uuid.resize(UUID_BYTES);
     f.read(&uuid[0], UUID_BYTES);
     if (f.gcount() == UUID_BYTES)
+    {
         return crypto::Hash<crypto::SHA512>(uuid);
-    uuid = maidsafe::RandomString(UUID_BYTES);
+    }
+    uuid = SRandString(UUID_BYTES);
     std::ofstream o(config_path);
     o.write(&uuid[0], UUID_BYTES);
     return crypto::Hash<crypto::SHA512>(uuid);
 }
 
-mk::Key Jellyfish::getKey(Jellyfish::Table t, std::string const &key)
+mk::Key Jellyfish::getKey(Table t, std::string const &key)
 {
     std::string table_name = Table2String(t);
     return mk::Key(crypto::Hash<crypto::SHA512>(table_name + std::string(":") + key));
@@ -653,43 +682,83 @@ JellyfishReturnCode Jellyfish::initStorage( std::string const &path, uint64_t si
         return jFileSystemError;
 
     ULOG(INFO) << "Storing storage data.\n";
-    _storage_data.size = ((uint64_t)1) << size;
-    _storage_path = path;
+    StorageData storage_data;
+    storage_data.size = ((uint64_t)1) << size;
+    storage_data.storage_path = path;
     int result;
     Synchronizer<int> sync(result);
-    _jelly_node->node()->Store(getKey(tStorage, _keys->identity), serialize_cast<std::string>(_storage_data), "", boost::posix_time::pos_infin, _private_key_ptr, sync);
+    _jelly_node->node()->Store(getKey(tStorage, _keys->identity), serialize_cast<std::string>(storage_data), "", boost::posix_time::pos_infin, _private_key_ptr, sync);
     sync.wait();
     if (result != mt::kSuccess)
     {
-        _storage_data.size = 0;
         return jCouldNotStore;
     }
+    _files_store.reset(new FilesStore(storage_data));
     return jSuccess;
 }
 
 JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, long long size, ClientProof const &client )
 {
+    if (!_files_store)
+        return JellyInternalStatus::STORAGE_UNITIALIZED;
     ULOG(INFO) << "localPrepareAdd(" << maidsafe::EncodeToHex(id) << ", " << size << ", " << client.user << ")";
-    return JellyInternalStatus::SUCCES;
+    return _files_store->prepareAdd(id, size, client);
 }
 
-JellyInternalStatus::type Jellyfish::localAdd( std::string const & id, std::string const & file, ClientProof const &client )
+JellyInternalStatus::type Jellyfish::localAdd( std::string const &salt, std::string const & id, std::string const & file, ClientProof const &client )
 {
-    ULOG(INFO) << "localAdd(" << maidsafe::EncodeToHex(id) << ", " << maidsafe::EncodeToBase64(file) << ", " << client.user << ")";
-    return JellyInternalStatus::SUCCES;
+    if (!_files_store)
+        return JellyInternalStatus::STORAGE_UNITIALIZED;
+    ULOG(INFO) << "localAdd(" << maidsafe::EncodeToHex(salt) << ", " << maidsafe::EncodeToHex(id) << ", " << maidsafe::EncodeToBase64(file) << ", " << client.user << ")";
+    return _files_store->add(salt, id, file, client);
 }
 
 JellyInternalStatus::type Jellyfish::localRemove( std::string const & id, ClientProof const & client )
 {
+    if (!_files_store)
+        return JellyInternalStatus::STORAGE_UNITIALIZED;
     ULOG(INFO) << "localRemove(" << maidsafe::EncodeToHex(id) << ", " << client.user << ")";
-    return JellyInternalStatus::SUCCES;
+    return _files_store->remove(id, client);
 }
 
 void Jellyfish::hashPart( HashStatus &res, std::string const & id, std::string const & salt, ClientProof const & client )
 {
+    if (!_files_store)
+    {
+        res.status = JellyInternalStatus::STORAGE_UNITIALIZED;
+        return;
+    }
     ULOG(INFO) << "hashPart(" << maidsafe::EncodeToHex(id) << ", " << maidsafe::EncodeToBase64(salt) << ", " << client.user << ")";
-    res.status = JellyInternalStatus::SUCCES;
+    _files_store->hashPart(res, id, salt, client);
 }
+
+bool Jellyfish::storeFileData( File &file )
+{
+    int store_result;
+    {
+        Synchronizer<int> sync_result(store_result);
+        _jelly_node->node()->Store(getKey(tFile, file.hash), serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+        sync_result.wait();
+        if (store_result != mk::kSuccess)
+        {
+            ULOG(WARNING) << "Connection error (1): " << mk::ReturnCode2String((mk::ReturnCode) store_result);
+            return false;
+        }
+    }
+    {
+        Synchronizer<int> sync_result(store_result);
+        ULOG(INFO) << maidsafe::EncodeToBase64(file.hash);
+        _jelly_node->node()->Store(getKey(tUserFiles, _login), file.hash, "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+        sync_result.wait();
+        if (store_result != mk::kSuccess)
+        {
+            ULOG(WARNING) << "Connection error (2): " << mk::ReturnCode2String((mk::ReturnCode) store_result);
+            return false;
+        }
+    }
+    return true;
+}
+
 void PrintNodeInfo(const mk::Contact &contact) {
     ULOG(INFO)
     << boost::format("Node ID:   %1%")
@@ -935,7 +1004,7 @@ void PrintNodeInfo(const mk::Contact &contact) {
 
 //void lol()
 //{
-//    std::string s = maidsafe::RandomString(/*rand() % */50000000);
+//    std::string s = SRandString(/*rand() % */50000000);
 //
 //    printf("packet: %d, buf: %d\n", getPacketSize(s.size(), 5), W*8*getPacketSize(s.size(), 5)*5);
 //
@@ -1015,4 +1084,45 @@ void PrintNodeInfo(const mk::Contact &contact) {
 //    for (int i = 0; i < n; ++i)
 //        lol();
 //    return 0;
+//}
+
+//int main2()
+//{
+//    //{
+//    //    std::string r = SRandString(10000);
+//    //    std::ofstream f("a");
+//    //    f.write(r.c_str(), r.size());
+//    //}
+//    std::string k = SRandString(crypto::AES256_KeySize), iv = SRandString(crypto::AES256_IVSize);
+//    std::vector<std::ostream *> parts, codes;
+//    for (int i = 0; i < 5; ++i)
+//    {
+//        parts.push_back(new std::ofstream(std::string("k_") + boost::lexical_cast<std::string>(i)));
+//        codes.push_back(new std::ofstream(std::string("m_") + boost::lexical_cast<std::string>(i)));
+//    }
+//    uint64_t size = Jellyfish::encodeFile(iv, k, "kjvdat.txt", parts, codes, [](uint64_t){return true;}, [](const char *, uint64_t){return false;});
+//    std::vector<int> positions;
+//    for (int i = 0; i < 5; ++i)
+//    {
+//        int r;
+//        while (true)
+//        {
+//            r = rand() % 10;
+//            bool cont = false;
+//            for (int p: positions)
+//                if (r == p)
+//                    cont = true;
+//            if (!cont)
+//                break;
+//        }
+//        positions.push_back(r);
+//    }
+//    std::sort(positions.begin(), positions.end());
+//    std::vector<std::istream *> data;
+//    for (int i = 0; i < 5; ++i)
+//    {
+//        data.push_back(new std::ifstream(std::string((positions[i] < N_PARTS) ? "k_" : "m_") +
+//            boost::lexical_cast<std::string>((positions[i] < N_PARTS) ? positions[i] : positions[i] - N_PARTS)));
+//    }
+//    Jellyfish::decodeFile(iv, k, data, positions, size, "b");
 //}
