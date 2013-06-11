@@ -21,6 +21,7 @@ void FilesStore::hashPart( HashStatus & res, std::string const & id, std::string
 // TODO: actually create the file in advance
 JellyInternalStatus::type FilesStore::prepareAdd( std::string const & id, long long size, ClientProof const & client )
 {
+    printf("Remaining size (%lu): %lu\n", size, _remaining_size);
     scoped_lock l(_mutex);
     updatePromises();
     if (_remaining_size < (uint64_t)size)

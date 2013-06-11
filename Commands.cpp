@@ -54,7 +54,8 @@ void Commands::PrintUsage() {
   ULOG(INFO) << "\tlogin <login> <password>          Login (do this first).";
   ULOG(INFO) << "\tcreate <login> <password>         Create (do this first).";
   ULOG(INFO) << "\tinit_storage <path> <size>        Initialize storage (very important).";
-  ULOG(INFO) << "\tadd_file <path>                   Add file at path.";
+  ULOG(INFO) << "\tput <path> <unique_name>          Add file at path.";
+  ULOG(INFO) << "\tls                                List files (unique names and sizes).";
   ULOG(INFO) << "\texit                              Stop the node and exit.";
   ULOG(INFO) << "\nSizes are 2^<size>GB.";
 }
@@ -114,12 +115,32 @@ void Commands::ProcessCommand(const std::string &cmdline) {
           good_size = true;
       }
   }
-  else if (cmd == "add_file") {
-      if (args.size() == 1)
+  else if (cmd == "put") {
+      if (args.size() == 2)
       {
-          JellyfishReturnCode ret = _jelly.addFile(args[0]);
+          JellyfishReturnCode ret = _jelly.addFile(args[0], args[1]);
           if (ret != jSuccess)
               ULOG(ERROR) << "Add file error: " << JellyfishReturnCode2String(ret);
+          good_size = true;
+      }
+  }
+  else if (cmd == "ls") {
+      if (args.size() == 0)
+      {
+          std::set<AbbreviatedFile> files;
+          JellyfishReturnCode ret = _jelly.listFiles(files);
+          if (ret != jSuccess)
+              ULOG(ERROR) << "ls error: " << JellyfishReturnCode2String(ret);
+          std::string::size_type max_size = 0;
+          for (AbbreviatedFile const &fi: files)
+          {
+              max_size = std::max(max_size, fi.relative_path.size());
+          }
+          for (AbbreviatedFile const &fi: files)
+          {
+              printf("%*s\t%lu\n", (int)max_size, fi.relative_path.c_str(), fi.size);
+          }
+          fflush(stdout);
           good_size = true;
       }
   }

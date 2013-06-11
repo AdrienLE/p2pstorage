@@ -23,7 +23,18 @@ MAKE_ENUM(JellyfishReturnCode,
           (jNoNodes)
           (jAddError)
           (jDisconnected) // We should make it as unlikely as possible that this will occur.
-          (jFileNotFound))
+          (jFileNotFound)
+          (jLsError)
+          (jAlreadyInitialized))
+
+
+#define W 15
+#define OPTIMAL_PACKET_SIZE 4000
+#define N_PARTS 5
+#define N_CODES 5
+#define THRESHOLD 100000
+#define SALT_BYTES 16
+#define UUID_BYTES (128/8)
 
 namespace mk = maidsafe::dht;
 
@@ -45,7 +56,22 @@ public:
     JellyfishReturnCode login(std::string const &login, std::string const &password);
     JellyfishReturnCode createAccount(std::string const &login, std::string const &password);
     JellyfishReturnCode initStorage(std::string const &path, uint64_t size);
-    JellyfishReturnCode addFile(std::string const &path);
+    JellyfishReturnCode addFile(std::string const &path, std::string const &unique_name);
+    JellyfishReturnCode getFile(std::string const &unique_name);
+    template<class Container>
+    JellyfishReturnCode listFiles(Container &cont)
+    {
+        maidsafe::dht::FindValueReturns findvalue;
+        Synchronizer<maidsafe::dht::FindValueReturns> sync(findvalue);
+        _jelly_node->node()->FindValue(getKey(tUserFiles, _login), _private_key_ptr, sync);
+        sync.wait();
+        if (sync.result != mk::kSuccess)
+            return jLsError;
+        for (auto const &v: findvalue.values_and_signatures)
+            cont.insert(serialize_cast<AbbreviatedFile>(v.first));
+        return jSuccess;
+    }
+
     __attribute__((noreturn)) void runInitNode(boost::filesystem::path const &bootstrap_file_path);
     
     std::string const &login() const { return _login; }
@@ -87,10 +113,10 @@ protected:
     bool contactServer(maidsafe::dht::Contact const &contact, boost::function<bool (JellyInternalClient &)> fct, bool raise = false, bool log = false);
 
     bool addBigFile(File &file, uint64_t size, std::vector<std::string> const &parts, std::vector<std::string> const &codes);
-
     bool storeFileData( File &file );
-
     bool addSmallFile(File &file, const char *filename, uint64_t size);
+
+    void tryFindStorageData();
     
     template<class Type>
     class Synchronizer

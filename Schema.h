@@ -73,6 +73,31 @@ struct FileBlockInfo
     }
 };
 
+struct AbbreviatedFile
+{
+    std::string hash;
+    uint64_t size;
+    std::string relative_path;
+
+    bool operator<(const AbbreviatedFile &a) const
+    {
+        return relative_path < a.relative_path;
+    }
+
+    bool operator==(const AbbreviatedFile &a) const
+    {
+        return relative_path == a.relative_path;
+    }
+
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned version)
+    {
+        ar & relative_path;
+        ar & hash;
+        ar & size;
+    }
+};
+
 struct File
 {
     std::string relative_path;
