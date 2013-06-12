@@ -90,3 +90,21 @@ void FilesStore::updatePromises()
         _promised.pop_front();
     }
 }
+
+void FilesStore::localGetFile( FileStatus &_return, const std::string &id, const ClientProof &client )
+{
+    std::string path = _storage_data.storage_path + "/" + maidsafe::EncodeToBase32(id);
+    std::ifstream f(path);
+    if (!f)
+    {
+        _return.status = JellyInternalStatus::NO_SUCH_FILE;
+        return;
+    }
+    f.seekg(0, std::ios::end);
+    size_t size = f.tellg();
+    f.clear();
+    f.seekg(0, std::ios::beg);
+    _return.content.resize(size);
+    f.read(&_return.content[0], size);
+    _return.status = JellyInternalStatus::SUCCES;
+}

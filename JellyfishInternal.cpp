@@ -22,3 +22,8 @@ void JellyfishInternal::hashPart( HashStatus &st, std::string const & id, std::s
     _jelly.hashPart(st, id, salt, client);
 }
 
+void JellyfishInternal::getFile( FileStatus& _return, const std::string& id, const ClientProof& client )
+{
+    _jelly.localGetFile(_return, id, client);
+}
+

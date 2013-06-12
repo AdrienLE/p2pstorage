@@ -25,7 +25,8 @@ MAKE_ENUM(JellyfishReturnCode,
           (jDisconnected) // We should make it as unlikely as possible that this will occur.
           (jFileNotFound)
           (jLsError)
-          (jAlreadyInitialized))
+          (jAlreadyInitialized)
+          (jUnknownError))
 
 
 #define W 15
@@ -57,7 +58,7 @@ public:
     JellyfishReturnCode createAccount(std::string const &login, std::string const &password);
     JellyfishReturnCode initStorage(std::string const &path, uint64_t size);
     JellyfishReturnCode addFile(std::string const &path, std::string const &unique_name);
-    JellyfishReturnCode getFile(std::string const &unique_name);
+    JellyfishReturnCode getFile(std::string const &unique_name, std::string const &path);
     template<class Container>
     JellyfishReturnCode listFiles(Container &cont)
     {
@@ -65,10 +66,14 @@ public:
         Synchronizer<maidsafe::dht::FindValueReturns> sync(findvalue);
         _jelly_node->node()->FindValue(getKey(tUserFiles, _login), _private_key_ptr, sync);
         sync.wait();
-        if (sync.result != mk::kSuccess)
+        if (findvalue.return_code != mk::kSuccess)
+        {
+            ULOG(INFO) << findvalue.return_code;
             return jLsError;
+        }
+        Inserter<Container, IsSetLike<Container>::is> inserter(cont);
         for (auto const &v: findvalue.values_and_signatures)
-            cont.insert(serialize_cast<AbbreviatedFile>(v.first));
+            inserter.insert(serialize_cast<AbbreviatedFile>(v.first));
         return jSuccess;
     }
 
@@ -80,6 +85,7 @@ public:
     JellyInternalStatus::type localAdd(std::string const &salt, std::string const &id, std::string const &file, ClientProof const &client);
     JellyInternalStatus::type localRemove(std::string const &id, ClientProof const &client);
     void hashPart(HashStatus &res, std::string const &id, std::string const &salt, ClientProof const &client);
+    void localGetFile(FileStatus& _return, const std::string& id, const ClientProof& client);
     
     static void getPartsCodes(std::istream &content, uint64_t size, int n_parts, int n_codes, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes);
     static bool getContentFromCodes(std::vector<std::istream *> in, std::vector<int> position, int n_parts, int n_codes, uint64_t size, std::ostream &out);
@@ -115,6 +121,7 @@ protected:
     bool addBigFile(File &file, uint64_t size, std::vector<std::string> const &parts, std::vector<std::string> const &codes);
     bool storeFileData( File &file );
     bool addSmallFile(File &file, const char *filename, uint64_t size);
+    static bool decryptFile(std::string const &iv, std::string const &key, std::string const &in, std::string const &out);
 
     void tryFindStorageData();
     
@@ -122,7 +129,7 @@ protected:
     class Synchronizer
     {
     public:
-        Synchronizer(Type &ret) : _ret(ret), _mutex(new boost::mutex), _lock(new boost::mutex::scoped_lock(*_mutex)), _cond_var(new boost::condition_variable)
+        Synchronizer(Type &ret) : _ret(ret), _mutex(new boost::mutex), _lock(new boost::mutex::scoped_lock(*_mutex)), _cond_var(new boost::condition_variable), _has_result(new bool(false)), _result(new int)
         {}
         void operator()(Type value)
         {
@@ -131,7 +138,9 @@ protected:
         }
         void operator()(int res, Type value)
         {
-            result = res;
+            ULOG(INFO) << res;
+            *_has_result = true;
+            *_result = res;
             _ret = value;
             _cond_var->notify_one();
         }
@@ -140,11 +149,50 @@ protected:
             _cond_var->wait(*_lock);
         }
 
-        int result;
+        int result() const
+        {
+            if (!*_has_result)
+                throw std::runtime_error("Trying to access result that wasn't set");
+            return *_result;
+        }
+
     private:
         Type &_ret;
         std::shared_ptr<boost::mutex> _mutex;
         std::shared_ptr<boost::mutex::scoped_lock> _lock;
         std::shared_ptr<boost::condition_variable> _cond_var;
+        std::shared_ptr<bool> _has_result;
+        std::shared_ptr<int> _result;
+    };
+
+    template<class Cont>
+    struct IsSetLike
+    {
+        enum
+        {
+            is = 1
+        };
+    };
+
+    template<class Cont, int insert_type>
+    class Inserter
+    {
+    public:
+        Inserter(Cont &cont) : _cont(cont) {}
+        template<class T>
+        void insert(const T &e) {_cont.insert(e);}
+
+    private:
+        Cont &_cont;
+    };
+    template<class Cont>
+    class Inserter<Cont, 0>
+    {
+        Inserter(Cont &cont) : _cont(cont) {}
+        template<class T>
+        void insert(const T &e) {_cont.push_back(e);}
+
+    private:
+        Cont &_cont;
     };
 };

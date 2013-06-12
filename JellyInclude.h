@@ -101,4 +101,5 @@ extern "C"
 #include "maidsafe/common/log.h"
 
 #include <boost/unordered_map.hpp>
+#include <boost/unordered_set.hpp>
 #include <list>

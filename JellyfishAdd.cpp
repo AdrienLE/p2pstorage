@@ -60,6 +60,7 @@ JellyfishReturnCode Jellyfish::addFile( std::string const &path, std::string con
     uint64_t stored_size = encodeFile(file.iv, _user_data.aes256_key, path.c_str(), parts, codes,
         [&](uint64_t sz)
     {
+        file.encoded_size = sz;
         std::vector<std::string> p;
         std::vector<std::string> c;
         for (unsigned i = 0; i < parts.size(); ++i)
@@ -68,7 +69,7 @@ JellyfishReturnCode Jellyfish::addFile( std::string const &path, std::string con
             c.push_back(to_remove[parts.size() + i]);
         return addBigFile(file, sz, p, c);
     },
-        [&](const char *filename, uint64_t sz){return addSmallFile(file, filename, sz);});
+        [&](const char *filename, uint64_t sz){file.encoded_size = sz; return addSmallFile(file, filename, sz);});
     for (std::string const &fname: to_remove)
         unlink(fname.c_str());
     if (stored_size == (uint64_t)-1)
@@ -110,7 +111,7 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
         Synchronizer<std::vector<mk::Contact> > sync(contacts);
         _jelly_node->node()->FindNodes(key, sync, 100);
         sync.wait();
-        if (sync.result != mk::kSuccess && !contacts.size())
+        if (sync.result() != mk::kSuccess && !contacts.size())
         {
             ULOG(WARNING) << "Could not find node.";
             return false;

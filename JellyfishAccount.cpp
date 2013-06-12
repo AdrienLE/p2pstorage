@@ -60,6 +60,7 @@ JellyfishReturnCode Jellyfish::createAccount(std::string const &login, std::stri
     _logged_in = true;
     _login = login;
     _user_data = user_data;
+    _user_data.aes256_key = aes_key;
     startServer();
     return jSuccess;
 }
@@ -133,7 +134,7 @@ void Jellyfish::startServer()
     Synchronizer<mk::FindValueReturns> sync(returns);
     _jelly_node->node()->FindValue(getKey(tStorage, _keys->identity), _private_key_ptr, sync);
     sync.wait();
-    if (sync.result == mk::kSuccess && returns.values_and_signatures.size() == 1)
+    if (returns.return_code == mk::kSuccess && returns.values_and_signatures.size() == 1)
     {
         _files_store.reset(new FilesStore(serialize_cast<StorageData>(returns.values_and_signatures[0].first)));
     }

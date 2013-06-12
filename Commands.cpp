@@ -54,8 +54,9 @@ void Commands::PrintUsage() {
   ULOG(INFO) << "\tlogin <login> <password>          Login (do this first).";
   ULOG(INFO) << "\tcreate <login> <password>         Create (do this first).";
   ULOG(INFO) << "\tinit_storage <path> <size>        Initialize storage (very important).";
-  ULOG(INFO) << "\tput <path> <unique_name>          Add file at path.";
+  ULOG(INFO) << "\tput <path> <unique_name>          Add file with unique name.";
   ULOG(INFO) << "\tls                                List files (unique names and sizes).";
+  ULOG(INFO) << "\tget <unique_name> <path>          Get file.";
   ULOG(INFO) << "\texit                              Stop the node and exit.";
   ULOG(INFO) << "\nSizes are 2^<size>GB.";
 }
@@ -141,6 +142,16 @@ void Commands::ProcessCommand(const std::string &cmdline) {
               printf("%*s\t%lu\n", (int)max_size, fi.relative_path.c_str(), fi.size);
           }
           fflush(stdout);
+          good_size = true;
+      }
+  }
+  else if (cmd == "get")
+  {
+      if (args.size() == 2)
+      {
+          JellyfishReturnCode ret = _jelly.getFile(args[0], args[1]);
+          if (ret != jSuccess)
+              ULOG(ERROR) << "Get error: " << JellyfishReturnCode2String(ret);
           good_size = true;
       }
   }

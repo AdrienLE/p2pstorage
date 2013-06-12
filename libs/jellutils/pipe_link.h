@@ -9,7 +9,7 @@
 #include "maidsafe/common/crypto.h"
 
 template<class F1, class F2>
-void pipe_link(F1 f1, F2 f2, bool real_file = false)
+void pipe_link(F1 f1, F2 f2, bool real_file = true)
 {
     std::string r = maidsafe::RandomString(16);
     r = maidsafe::EncodeToBase32(r);
@@ -27,6 +27,8 @@ void pipe_link(F1 f1, F2 f2, bool real_file = false)
         t.join();
     f2(r.c_str());
     if (!real_file)
+    {
         t.join();
+    }
     unlink(r.c_str());
 }

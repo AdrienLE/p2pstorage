@@ -88,10 +88,23 @@ void Jellyfish::hashPart( HashStatus &res, std::string const & id, std::string c
     _files_store->hashPart(res, id, salt, client);
 }
 
+void Jellyfish::localGetFile(FileStatus& _return, const std::string& id, const ClientProof& client)
+{
+    if (!_files_store)
+    {
+        _return.status = JellyInternalStatus::STORAGE_UNITIALIZED;
+        return;
+    }
+    ULOG(INFO) << "localGetFile(" << maidsafe::EncodeToBase64(id) << ", " << client.user << ")";
+    _files_store->localGetFile(_return, id, client);
+}
+
 bool Jellyfish::storeFileData( File &file )
 {
     int store_result;
     {
+        for (FileBlockInfo const &b: file.blocks)
+            ULOG(INFO) << "Adding file: " << maidsafe::EncodeToBase64(b.hash_id);
         Synchronizer<int> sync_result(store_result);
         _jelly_node->node()->Store(getKey(tFile, file.hash), serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
         sync_result.wait();

@@ -98,12 +98,19 @@ struct AbbreviatedFile
     }
 };
 
+static std::size_t hash_value(AbbreviatedFile const& b)
+{
+    boost::hash<std::string> hasher;
+    return hasher(b.relative_path);
+}
+
 struct File
 {
     std::string relative_path;
     std::string salt;
     std::string hash;
     uint64_t size;
+    uint64_t encoded_size;
     uint16_t real_parts;
     uint16_t code_parts;
     std::string iv;
@@ -119,6 +126,7 @@ struct File
         ar & salt;
         ar & hash;
         ar & size;
+        ar & encoded_size;
         ar & real_parts;
         ar & code_parts;
         ar & iv;

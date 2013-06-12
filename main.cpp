@@ -1,5 +1,7 @@
 #include "JellyInclude.h"
 
+#include <signal.h>
+
 #include "Commands.h"
 #include "Jellyfish.h"
 
@@ -115,6 +117,7 @@ void validate(boost::any& v, const std::vector<std::string>& values,
 }
 
 int main(int argc, char **argv) {
+    signal(SIGPIPE, SIG_IGN);
     maidsafe::InitLogging(argv[0]);
 #ifndef __APPLE__
     fs::path cur_path = fs::initial_path();

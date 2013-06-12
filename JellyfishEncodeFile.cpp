@@ -132,6 +132,7 @@ bool Jellyfish::getContentFromCodes(std::vector<std::istream *> in, std::vector<
 
 uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, const char *filename_in, std::vector<std::ostream *> const &parts, std::vector<std::ostream *> const &codes, boost::function<bool (uint64_t size)> big_callback, boost::function<bool (const char *, uint64_t)> small_callback)
 {
+    ULOG(INFO) << "Encoding: Iv (" << maidsafe::EncodeToBase64(iv) << "), Key (" << maidsafe::EncodeToBase64(key) << ")";
     if (key.size() < crypto::AES256_KeySize || iv.size() < crypto::AES256_IVSize)
     {
         DLOG(WARNING) << "Undersized key or IV";
@@ -198,6 +199,7 @@ uint64_t Jellyfish::encodeFile(std::string const &iv, std::string const &key, co
 
 bool Jellyfish::decodeFile(std::string const &iv, std::string const &key, std::vector<std::istream *> const &in, std::vector<int> const &positions, uint64_t size, std::string const &filename_out)
 {
+    ULOG(INFO) << "Decoding: Iv (" << maidsafe::EncodeToBase64(iv) << "), Key (" << maidsafe::EncodeToBase64(key) << ")";
     if (key.size() < crypto::AES256_KeySize || iv.size() < crypto::AES256_IVSize)
     {
         DLOG(WARNING) << "Undersized key or IV";
@@ -212,28 +214,39 @@ bool Jellyfish::decodeFile(std::string const &iv, std::string const &key, std::v
     },
         [&](const char *filename)
     {
-        try
-        {
-            byte bkey[crypto::AES256_KeySize], biv[crypto::AES256_IVSize];
-
-            CryptoPP::StringSource(key.substr(0, crypto::AES256_KeySize), true,
-                new CryptoPP::ArraySink(bkey, sizeof(bkey)));
-            CryptoPP::StringSource(iv.substr(0, crypto::AES256_IVSize), true,
-                new CryptoPP::ArraySink(biv, sizeof(biv)));
-
-            CryptoPP::CFB_Mode<CryptoPP::AES>::Decryption decryptor(bkey, sizeof(bkey), biv);
-            CryptoPP::FileSource(filename, true,
-                new CryptoPP::StreamTransformationFilter(decryptor,
-                new CryptoPP::Gunzip(
-                new CryptoPP::FileSink(filename_out.c_str(), true))));
-        }
-        catch (...)
-        {
-            success_b = false;
-        }
+        success_b = decryptFile(iv, key, filename, filename_out);
     });
     if (!success_a || !success_b)
         unlink(filename_out.c_str());
     return success_a && success_b;
 }
 
+bool Jellyfish::decryptFile(std::string const &iv, std::string const &key, std::string const &filename, std::string const &filename_out)
+{
+    ULOG(INFO) << "Decrypting: Iv (" << maidsafe::EncodeToBase64(iv) << "), Key (" << maidsafe::EncodeToBase64(key) << ")";
+    try
+    {
+        byte bkey[crypto::AES256_KeySize], biv[crypto::AES256_IVSize];
+
+        CryptoPP::StringSource(key.substr(0, crypto::AES256_KeySize), true,
+            new CryptoPP::ArraySink(bkey, sizeof(bkey)));
+        CryptoPP::StringSource(iv.substr(0, crypto::AES256_IVSize), true,
+            new CryptoPP::ArraySink(biv, sizeof(biv)));
+
+        CryptoPP::CFB_Mode<CryptoPP::AES>::Decryption decryptor(bkey, sizeof(bkey), biv);
+        CryptoPP::FileSource(filename.c_str(), true,
+            new CryptoPP::StreamTransformationFilter(decryptor,
+            new CryptoPP::Gunzip(
+            new CryptoPP::FileSink(filename_out.c_str()))));
+    }
+    catch (std::exception const &e)
+    {
+        ULOG(WARNING) << "Decrypt file error: " << e.what();
+        return false;
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return true;
+}
