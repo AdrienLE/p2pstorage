@@ -1,7 +1,6 @@
 #pragma once
 
-#include <vector>
-#include "maidsafe/dht/contact.h"
+#include "JellyInclude.h"
 
 namespace bptime = boost::posix_time;
 

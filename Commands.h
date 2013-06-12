@@ -27,20 +27,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include "JellyInclude.h"
+
 #include "JellyfishConfig.h"
 #include "Jellyfish.h"
-
-#include <memory>
-#include <string>
-#include <vector>
-
-#include "boost/date_time/posix_time/posix_time_types.hpp"
-#include "boost/thread/condition_variable.hpp"
-#include "boost/thread/mutex.hpp"
-
-#include "maidsafe/dht/config.h"
-#include "maidsafe/dht/node-api.h"
-#include "maidsafe/dht/node_container.h"
 
 class Commands {
  public:

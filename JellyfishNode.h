@@ -1,9 +1,6 @@
 #pragma once
 
-#include "maidsafe/dht/config.h"
-#include "maidsafe/dht/node-api.h"
-#include "maidsafe/dht/node_container.h"
-#include "maidsafe/common/crypto.h"
+#include "JellyInclude.h"
 
 #define JELLYFISH_VERSION "0.1"
 

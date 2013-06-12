@@ -25,28 +25,11 @@ TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "JellyInclude.h"
+
 #include "Commands.h"
 
 #include <iostream>  // NOLINT
-
-#include "boost/format.hpp"
-#include "boost/filesystem.hpp"
-#ifdef __MSVC__
-#  pragma warning(push)
-#  pragma warning(disable: 4127)
-#endif
-#include "boost/tokenizer.hpp"
-#ifdef __MSVC__
-#  pragma warning(pop)
-#endif
-#include "boost/lexical_cast.hpp"
-#include "maidsafe/common/crypto.h"
-#include "maidsafe/common/utils.h"
-
-#include "maidsafe/common/log.h"
-#include "maidsafe/dht/contact.h"
-#include "maidsafe/dht/node_id.h"
-#include "maidsafe/dht/node-api.h"
 
 namespace args = std::placeholders;
 namespace fs = boost::filesystem;
@@ -71,7 +54,9 @@ void Commands::PrintUsage() {
   ULOG(INFO) << "\tlogin <login> <password>          Login (do this first).";
   ULOG(INFO) << "\tcreate <login> <password>         Create (do this first).";
   ULOG(INFO) << "\tinit_storage <path> <size>        Initialize storage (very important).";
-  ULOG(INFO) << "\tadd_file <path>                   Add file at path.";
+  ULOG(INFO) << "\tput <path> <unique_name>          Add file with unique name.";
+  ULOG(INFO) << "\tls                                List files (unique names and sizes).";
+  ULOG(INFO) << "\tget <unique_name> <path>          Get file.";
   ULOG(INFO) << "\texit                              Stop the node and exit.";
   ULOG(INFO) << "\nSizes are 2^<size>GB.";
 }
@@ -131,12 +116,42 @@ void Commands::ProcessCommand(const std::string &cmdline) {
           good_size = true;
       }
   }
-  else if (cmd == "add_file") {
-      if (args.size() == 1)
+  else if (cmd == "put") {
+      if (args.size() == 2)
       {
-          JellyfishReturnCode ret = _jelly.addFile(args[0]);
+          JellyfishReturnCode ret = _jelly.addFile(args[0], args[1]);
           if (ret != jSuccess)
               ULOG(ERROR) << "Add file error: " << JellyfishReturnCode2String(ret);
+          good_size = true;
+      }
+  }
+  else if (cmd == "ls") {
+      if (args.size() == 0)
+      {
+          std::set<AbbreviatedFile> files;
+          JellyfishReturnCode ret = _jelly.listFiles(files);
+          if (ret != jSuccess)
+              ULOG(ERROR) << "ls error: " << JellyfishReturnCode2String(ret);
+          std::string::size_type max_size = 0;
+          for (AbbreviatedFile const &fi: files)
+          {
+              max_size = std::max(max_size, fi.relative_path.size());
+          }
+          for (AbbreviatedFile const &fi: files)
+          {
+              printf("%*s\t%lu\n", (int)max_size, fi.relative_path.c_str(), fi.size);
+          }
+          fflush(stdout);
+          good_size = true;
+      }
+  }
+  else if (cmd == "get")
+  {
+      if (args.size() == 2)
+      {
+          JellyfishReturnCode ret = _jelly.getFile(args[0], args[1]);
+          if (ret != jSuccess)
+              ULOG(ERROR) << "Get error: " << JellyfishReturnCode2String(ret);
           good_size = true;
       }
   }
