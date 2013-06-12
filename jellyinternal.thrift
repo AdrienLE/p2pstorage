@@ -28,8 +28,8 @@ struct FileStatus
 
 service JellyInternal
 {
-  JellyInternalStatus prepareAddPart(1:string id, 2:i64 size, 3:ClientProof client);
-  JellyInternalStatus addPart(1: string salt, 2:string id, 3:string file, 4:ClientProof client);
+  JellyInternalStatus prepareAddPart(1:string id, 2:i64 size, 3:ClientProof client, 4:i64 total_size);
+  JellyInternalStatus addPart(1: string salt, 2:string id, 3:string file, 4:ClientProof client, 5:i64 total_size);
   JellyInternalStatus removePart(1:string id, 2:ClientProof client);
   HashStatus hashPart(1:string id, 2:string salt, 3:ClientProof client);
   FileStatus getFile(1:string id, 2:ClientProof client);

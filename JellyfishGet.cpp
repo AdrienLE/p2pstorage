@@ -26,7 +26,8 @@ JellyfishReturnCode Jellyfish::getFile( std::string const &unique_name, std::str
     mk::FindValueReturns returns;
     {
         Synchronizer<mk::FindValueReturns> sync(returns);
-        _jelly_node->node()->FindValue(getKey(tFile, it->hash), _private_key_ptr, sync);
+        mk::Key k = getKey(tFile, it->hash);
+        _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
         sync.wait();
         if (returns.return_code != mk::kSuccess || returns.values_and_signatures.size() != 1)
         {
@@ -39,7 +40,8 @@ JellyfishReturnCode Jellyfish::getFile( std::string const &unique_name, std::str
         ULOG(INFO) << "File in DHT";
         mk::FindValueReturns returns;
         Synchronizer<mk::FindValueReturns> sync(returns);
-        _jelly_node->node()->FindValue(getKey(tFullFile, file.hash), _private_key_ptr, sync);
+        mk::Key k = getKey(tFullFile, file.hash);
+        _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
         sync.wait();
         if (returns.return_code != mk::kSuccess || returns.values_and_signatures.size() != 1)
             return jFileNotFound;

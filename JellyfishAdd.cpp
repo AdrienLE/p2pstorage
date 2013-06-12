@@ -128,13 +128,13 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
             if (contactServer(contact, [&](JellyInternalClient &client)
             {
                 ULOG(INFO) << "Found node";
-                JellyInternalStatus::type ret = client.prepareAddPart(hash, size_part, proof);
+                JellyInternalStatus::type ret = client.prepareAddPart(hash, size_part, proof, file.size);
                 if (ret != JellyInternalStatus::SUCCES)
                 {
                     ULOG(INFO) << "Error prepareAdd: " << ret;
                     return false;
                 }
-                ret = client.addPart(file.salt, hash, content, proof);
+                ret = client.addPart(file.salt, hash, content, proof, file.size);
                 if (ret != JellyInternalStatus::SUCCES)
                     return false;
 
@@ -150,7 +150,8 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
 
                 int store_result;
                 Synchronizer<int> sync_result(store_result);
-                _jelly_node->node()->Store(getKey(tStoredBlocks, contact.node_id().String()),
+                mk::Key k = getKey(tStoredBlocks, contact.node_id().String());
+                _jelly_node->node()->Store(k,
                     serialize_cast<std::string>(stored_block), "", boost::posix_time::pos_infin,
                     PrivateKeyPtr(), sync_result);
                 sync_result.wait();
@@ -185,7 +186,8 @@ bool Jellyfish::addSmallFile(File &file, const char *filename, uint64_t size)
     f.read(&to_store[0], size);
     int result;
     Synchronizer<int> sync(result);
-    _jelly_node->node()->Store(getKey(tFullFile, file.hash), to_store, "", boost::posix_time::pos_infin, _private_key_ptr, sync);
+    mk::Key k = getKey(tFullFile, file.hash);
+    _jelly_node->node()->Store(k, to_store, "", boost::posix_time::pos_infin, _private_key_ptr, sync);
     sync.wait();
     if (result != mk::kSuccess)
     {

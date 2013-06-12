@@ -53,7 +53,7 @@ mk::Key Jellyfish::getKey(Table t, std::string const &key)
     return mk::Key(crypto::Hash<crypto::SHA512>(table_name + std::string(":") + key));
 }
 
-JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, long long size, ClientProof const &client )
+JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, long long size, ClientProof const &client, int64_t total_size )
 {
     if (!_files_store)
         return JellyInternalStatus::STORAGE_UNITIALIZED;
@@ -61,7 +61,7 @@ JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, lon
     return _files_store->prepareAdd(id, size, client);
 }
 
-JellyInternalStatus::type Jellyfish::localAdd( std::string const &salt, std::string const & id, std::string const & file, ClientProof const &client )
+JellyInternalStatus::type Jellyfish::localAdd( std::string const &salt, std::string const & id, std::string const & file, ClientProof const &client, int64_t total_size )
 {
     if (!_files_store)
         return JellyInternalStatus::STORAGE_UNITIALIZED;
@@ -106,7 +106,8 @@ bool Jellyfish::storeFileData( File &file )
         for (FileBlockInfo const &b: file.blocks)
             ULOG(INFO) << "Adding file: " << maidsafe::EncodeToBase64(b.hash_id);
         Synchronizer<int> sync_result(store_result);
-        _jelly_node->node()->Store(getKey(tFile, file.hash), serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+        mk::Key k = getKey(tFile, file.hash);
+        _jelly_node->node()->Store(k, serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
         sync_result.wait();
         if (store_result != mk::kSuccess)
         {
@@ -121,7 +122,8 @@ bool Jellyfish::storeFileData( File &file )
         abv.hash = file.hash;
         abv.size = file.size;
         abv.relative_path = file.relative_path;
-        _jelly_node->node()->Store(getKey(tUserFiles, _login), serialize_cast<std::string>(abv), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+        mk::Key k = getKey(tUserFiles, _login);
+        _jelly_node->node()->Store(k, serialize_cast<std::string>(abv), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
         sync_result.wait();
         if (store_result != mk::kSuccess)
         {

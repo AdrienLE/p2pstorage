@@ -52,6 +52,7 @@ JellyfishReturnCode Jellyfish::createAccount(std::string const &login, std::stri
     ULOG(INFO) << "Connecting definitely.\n";
     _keys.reset(new asymm::Keys(keys));
     _keys->identity = getNodeIdUser(login);
+    _private_key_ptr = mk::PrivateKeyPtr(new asymm::PrivateKey(_keys->private_key));
     _jelly_node.reset(new JellyNode);
     _jelly_node->Init(static_cast<uint8_t>(_jelly_conf.thread_count),
         _keys, mk::MessageHandlerPtr(), false, _jelly_conf.k,
@@ -132,7 +133,8 @@ void Jellyfish::startServer()
     }
     mk::FindValueReturns returns;
     Synchronizer<mk::FindValueReturns> sync(returns);
-    _jelly_node->node()->FindValue(getKey(tStorage, _keys->identity), _private_key_ptr, sync);
+    mk::Key k = getKey(tStorage, _keys->identity);
+    _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
     sync.wait();
     if (returns.return_code == mk::kSuccess && returns.values_and_signatures.size() == 1)
     {

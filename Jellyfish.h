@@ -64,7 +64,8 @@ public:
     {
         maidsafe::dht::FindValueReturns findvalue;
         Synchronizer<maidsafe::dht::FindValueReturns> sync(findvalue);
-        _jelly_node->node()->FindValue(getKey(tUserFiles, _login), _private_key_ptr, sync);
+        mk::Key k = getKey(tUserFiles, _login);
+        _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
         sync.wait();
         if (findvalue.return_code != mk::kSuccess)
         {
@@ -81,8 +82,8 @@ public:
     
     std::string const &login() const { return _login; }
 
-    JellyInternalStatus::type localPrepareAdd(std::string const &id, long long size, ClientProof const &client);
-    JellyInternalStatus::type localAdd(std::string const &salt, std::string const &id, std::string const &file, ClientProof const &client);
+    JellyInternalStatus::type localPrepareAdd(std::string const &id, long long size, ClientProof const &client, int64_t total_size);
+    JellyInternalStatus::type localAdd(std::string const &salt, std::string const &id, std::string const &file, ClientProof const &client, int64_t total_size);
     JellyInternalStatus::type localRemove(std::string const &id, ClientProof const &client);
     void hashPart(HashStatus &res, std::string const &id, std::string const &salt, ClientProof const &client);
     void localGetFile(FileStatus& _return, const std::string& id, const ClientProof& client);

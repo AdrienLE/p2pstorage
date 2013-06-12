@@ -60,6 +60,21 @@ struct StoredBlock
     }
 };
 
+MAKE_ENUM(BadReason,
+          (bMissingPart)
+          (bCantConnect))
+
+struct BadRecord
+{
+    BadReason reason;
+    std::string node;
+    uint64_t node_size;
+    std::string originating_node;
+    std::string originating_user;
+    std::string block_id;
+    uint64_t timestamp;
+};
+
 struct FileBlockInfo
 {
     std::string hash_id;
