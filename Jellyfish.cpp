@@ -161,7 +161,6 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
     for (auto elem: returns.values_and_signatures)
     {
         StorageData storage_data = serialize_cast<StorageData>(elem.first);
-        ULOG(INFO) << storage_data.size;
         k = getKey(tKarma, storage_data.node_id);
         mk::FindValueReturns returns2;
         Synchronizer<mk::FindValueReturns> sync2(returns2);
@@ -172,7 +171,8 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
         boost::unordered_set<uint64_t> bad_hours;
         uint64_t node_hour = storage_data.node_creation_hour;
         bool tempered_time = false;
-        if (!returns2.return_code == mk::kSuccess)
+        ULOG(INFO) << node_size;
+        if (returns2.return_code == mk::kSuccess)
         {
             for (auto r: returns2.values_and_signatures)
             {
@@ -203,7 +203,8 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
             float expected_ratio = ((float) N_PARTS + (float)N_CODES/3) / (N_PARTS + N_CODES);
             node_size *= actual_ratio / expected_ratio;
         }
-        max_size += node_size;
+        ULOG(INFO) << "U " << node_size;
+        max_size += ((float) N_PARTS) / (N_PARTS + N_CODES) * node_size;
     }
     ULOG(INFO) << "User: " << username << " has " << max_size << " bytes of storage.";
 

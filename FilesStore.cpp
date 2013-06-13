@@ -25,9 +25,15 @@ JellyInternalStatus::type FilesStore::prepareAdd( std::string const & id, long l
     scoped_lock l(_mutex);
     updatePromises();
     if (_remaining_size < (uint64_t)size)
+    {
+        ULOG(WARNING) << "No space left.";
         return JellyInternalStatus::NO_SPACE_LEFT;
+    }
     if (_promised_locations.find(id) != _promised_locations.end())
+    {
+        ULOG(WARNING) << "Did not prepare add.";
         return JellyInternalStatus::INVALID_REQUEST;
+    }
     PromisedBlock b;
     b.size = size;
     b.promised_time = boost::posix_time::second_clock::local_time();
@@ -54,7 +60,10 @@ JellyInternalStatus::type FilesStore::add( std::string const & salt, std::string
     std::istringstream is(file);
     std::string hash = HashSalt<crypto::SHA256>(salt, is);
     if (hash != id)
+    {
+        ULOG(WARNING) << "Bad hash: " << maidsafe::EncodeToBase64(hash) << " instead of " << maidsafe::EncodeToBase64(id);
         return JellyInternalStatus::INVALID_REQUEST;
+    }
     std::string write_path = _storage_data.storage_path + "/" + maidsafe::EncodeToBase32(id);
     std::ofstream f(write_path.c_str());
     f.write(&file[0], file.size()); // TODO: test if file is indeed written
