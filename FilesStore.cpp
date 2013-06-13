@@ -55,8 +55,14 @@ JellyInternalStatus::type FilesStore::add( std::string const & salt, std::string
     std::string hash = HashSalt<crypto::SHA256>(salt, is);
     if (hash != id)
         return JellyInternalStatus::INVALID_REQUEST;
-    std::ofstream f((_storage_data.storage_path + "/" + maidsafe::EncodeToBase32(id)).c_str());
+    std::string write_path = _storage_data.storage_path + "/" + maidsafe::EncodeToBase32(id);
+    std::ofstream f(write_path.c_str());
     f.write(&file[0], file.size()); // TODO: test if file is indeed written
+    if (!f)
+    {
+        ULOG(WARNING) << "Could not write to: " << write_path;
+        return JellyInternalStatus::NO_SPACE_LEFT;
+    }
     StoredBlock block;
     block.hash_id = id;
     block.salt = salt;
