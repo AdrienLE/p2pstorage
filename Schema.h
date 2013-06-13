@@ -60,6 +60,13 @@ struct StoredBlock
     }
 };
 
+struct Challenge
+{
+    std::string hash_id;
+    std::string salt;
+    std::string challenge_hash;
+};
+
 MAKE_ENUM(KarmaReason,
           (bMissingPart)
           (bCantConnect))

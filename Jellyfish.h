@@ -31,8 +31,8 @@ MAKE_ENUM(JellyfishReturnCode,
 
 #define W 15
 #define OPTIMAL_PACKET_SIZE 4000
-#define N_PARTS 5
-#define N_CODES 5
+#define N_PARTS 10
+#define N_CODES 13
 #define THRESHOLD 100000
 #define SALT_BYTES 16
 #define UUID_BYTES (128/8)

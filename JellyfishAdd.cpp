@@ -102,6 +102,10 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
         std::string hash = HashSalt<crypto::SHA256>(file.salt, block);
         block.clear();
         block.seekg(0, std::ios::beg);
+        for (int i = 0; i < 4; ++i)
+        {
+
+        }
         std::string content;
         content.resize(size_part);
         block.read(&content[0], size_part);

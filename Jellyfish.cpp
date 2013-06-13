@@ -90,6 +90,7 @@ void Jellyfish::hashPart( HashStatus &res, std::string const & id, std::string c
 
 void Jellyfish::localGetFile(FileStatus& _return, const std::string& id, const ClientProof& client)
 {
+    _return.status = JellyInternalStatus::INVALID_REQUEST;
     if (!_files_store)
     {
         _return.status = JellyInternalStatus::STORAGE_UNITIALIZED;

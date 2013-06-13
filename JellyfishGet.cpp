@@ -94,12 +94,14 @@ JellyfishReturnCode Jellyfish::getFile( std::string const &unique_name, std::str
             client.getFile(status, block.hash_id, proof);
             if (status.status != JellyInternalStatus::SUCCES)
             {
-                return false; // TODO: Handle the specifics of the status
+                ULOG(WARNING) << "Error when getting part " << maidsafe::EncodeToBase64(block.hash_id) << " (" << status.status << ")";
+                return false;
             }
             std::istringstream is(status.content);
             std::string hash = HashSalt<crypto::SHA256>(file.salt, is);
             if (hash != block.hash_id)
             {
+                ULOG(WARNING) << "Bad hash for block: " << maidsafe::EncodeToBase64(block.hash_id);
                 return false; // TODO: Handle the specifics
             }
             std::string filename = std::string("/tmp/tmpblock_") + maidsafe::EncodeToBase32(maidsafe::RandomString(16));
@@ -109,7 +111,7 @@ JellyfishReturnCode Jellyfish::getFile( std::string const &unique_name, std::str
             found_blocks.push_back(block);
             positions.push_back(current);
             return true;
-        }); // TODO: Should we use worked?
+        }, true); // TODO: Should we use worked?
     }
     std::vector<std::istream *> streams;
     for (std::string const &filename: filenames)
