@@ -15,15 +15,12 @@ else
 	stop_time=$(($rdm*$2))
 	echo "Launching client '$client' for $run_time secondes"
 	if [ $first -eq 1 ]; then
-	    ./jelly --create=$client --init_storage=2 &
 	    first=0
+	    timeout --foreground -s USR1 ${run_time} ./jelly --create=$client --init_storage=2
 	else
-	    ./jelly --login=$client &
+	    timeout --foreground -s USR1 ${run_time} ./jelly --login=$client
 	fi
-	PID=$!
-	sleep $run_time
 	echo "Stopping client '$client' for $stop_time secondes"
-	kill -USR1 $PID
 	sleep $stop_time
     done
 fi
