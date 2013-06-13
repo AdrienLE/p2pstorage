@@ -38,8 +38,8 @@ JellyfishReturnCode Jellyfish::createAccount(std::string const &login, std::stri
     user_data.public_key = publi;
     std::string aes_key = SRandString(crypto::AES256_KeySize);
     asymm::Encrypt(aes_key, keys.public_key, &user_data.aes256_key);
-    std::string value = serialize_cast<std::string>(user_data);
 
+    std::string value = serialize_cast<std::string>(user_data);
     ULOG(INFO) << "Storing user.\n";
     mk::Key key = getKey(tUser, login);
     int result;

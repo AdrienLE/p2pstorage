@@ -146,13 +146,14 @@ bool Jellyfish::storeFileData( File &file, uint64_t part_size )
 
 bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
 {
+    return true;
     boost::unordered_set<AbbreviatedFile> files;
     if (!listFiles(files, username))
         return false;
     mk::Key k = getKey(tStorage, _login);
     mk::FindValueReturns returns;
     Synchronizer<mk::FindValueReturns> sync(returns);
-    _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
+    _jelly_node->node()->FindValue(k, _private_key_ptr, sync, 0, false);
     sync.wait();
     if (returns.return_code != mk::kSuccess)
         return false;
@@ -164,7 +165,7 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
         mk::FindValueReturns returns2;
         Synchronizer<mk::FindValueReturns> sync2(returns2);
         _jelly_node->node()->FindValue(k, _private_key_ptr, sync2);
-        sync.wait();
+        sync2.wait();
         uint64_t node_size = storage_data.size;
         int reasons[last_KarmaReason_enum] = {0};
         boost::unordered_set<uint64_t> bad_hours;
@@ -203,10 +204,12 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
         }
         max_size += node_size;
     }
+    ULOG(INFO) << "User: " << username << " has " << max_size << " bytes of storage.";
 
     k = getKey(tUserFiles, _login);
-    _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
-    sync.wait();
+    Synchronizer<mk::FindValueReturns> sync2(returns);
+    _jelly_node->node()->FindValue(k, _private_key_ptr, sync2);
+    sync2.wait();
     for (auto elem: returns.values_and_signatures)
     {
         AbbreviatedFile abv = serialize_cast<AbbreviatedFile>(elem.first);
@@ -214,6 +217,7 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
             return false;
         max_size -= std::max(abv.size, abv.part_size * N_PARTS);
     }
+    ULOG(INFO) << "From his files, user: " << username << " has " << max_size << " bytes.";
     if (size > max_size)
         return false;
     return true;

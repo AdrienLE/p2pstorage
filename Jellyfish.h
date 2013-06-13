@@ -134,7 +134,7 @@ protected:
     class Synchronizer
     {
     public:
-        Synchronizer(Type &ret) : _ret(ret), _mutex(new boost::mutex), _lock(new boost::mutex::scoped_lock(*_mutex)), _cond_var(new boost::condition_variable), _has_result(new bool(false)), _result(new int)
+        Synchronizer(Type &ret) : _ret(ret), _mutex(new boost::mutex), _lock(new boost::mutex::scoped_lock(*_mutex)), _cond_var(new boost::condition_variable), _has_result(new bool(false)), _result(new int), _called_once(false)
         {}
         void operator()(Type value)
         {
@@ -157,6 +157,9 @@ protected:
         }
         void wait()
         {
+            if (_called_once)
+                throw std::runtime_error("Don't call the same synchronizer twice: this is probably a mistake.");
+            _called_once = true;
             _cond_var->wait(*_lock);
         }
 
@@ -174,6 +177,7 @@ protected:
         std::shared_ptr<boost::condition_variable> _cond_var;
         std::shared_ptr<bool> _has_result;
         std::shared_ptr<int> _result;
+        bool _called_once;
     };
 
     template<class Cont>
