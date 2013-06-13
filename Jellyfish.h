@@ -157,8 +157,6 @@ protected:
         }
         void wait()
         {
-            if (_called_once)
-                throw std::runtime_error("Don't call the same synchronizer twice: this is probably a mistake.");
             _called_once = true;
             _cond_var->wait(*_lock);
         }
