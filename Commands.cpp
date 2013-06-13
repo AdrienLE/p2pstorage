@@ -39,6 +39,15 @@ using namespace maidsafe;
 
 void Commands::Run() {
   _timer.start();
+  if (_login != "")
+      _jelly.login(_login, "password");
+  else if (_create != "")
+  {
+      _jelly.createAccount(_create, "password");
+      if (_storage != -1)
+          _jelly.initStorage(std::string("../Storage/") + _create, _storage);
+  }
+
   PrintUsage();
   while (!finish_ && std::cin.good()) {
     std::cout << "Jellyfish (" << _jelly.login() << ") > ";

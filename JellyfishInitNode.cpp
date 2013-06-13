@@ -49,9 +49,11 @@ JellyfishReturnCode Jellyfish::initStorage( std::string const &path, uint64_t si
     StorageData storage_data;
     storage_data.size = ((uint64_t)1) << (size + 29);
     storage_data.storage_path = path;
+    storage_data.node_id = _keys->identity;
+    storage_data.node_creation_hour = hoursSinceEpoch();
     int result;
     Synchronizer<int> sync(result);
-    mk::Key k = getKey(tStorage, _keys->identity);
+    mk::Key k = getKey(tStorage, _login);
     std::string value = serialize_cast<std::string>(storage_data);
     _jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin, _private_key_ptr, sync);
     sync.wait();
@@ -60,6 +62,8 @@ JellyfishReturnCode Jellyfish::initStorage( std::string const &path, uint64_t si
         return jCouldNotStore;
     }
     _files_store.reset(new FilesStore(storage_data));
+    std::ofstream f(_config_path + "/storage_data");
+    f.write(&value[0], value.size());
     return jSuccess;
 }
 

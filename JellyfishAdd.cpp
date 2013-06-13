@@ -91,11 +91,14 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
     ClientProof proof;
     proof.user = _login;
 
+    uint64_t max_part_size = 0;
+
     for (std::string const &filename: data)
     {
         std::ifstream block(filename.c_str());
         block.seekg(0, std::ios::end);
         uint64_t size_part = block.tellg();
+        max_part_size = std::max(size_part, max_part_size);
         printf("total_size %lu\n", size_part);
         block.clear();
         block.seekg(0, std::ios::beg);
@@ -177,7 +180,7 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
         }
     }
 
-    return storeFileData(file);
+    return storeFileData(file, max_part_size);
 }
 
 bool Jellyfish::addSmallFile(File &file, const char *filename, uint64_t size)

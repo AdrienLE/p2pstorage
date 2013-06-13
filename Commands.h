@@ -34,7 +34,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class Commands {
  public:
-  explicit Commands(JellyfishConfig const &jelly_config) : _jelly(jelly_config), finish_(false) {}
+  explicit Commands(JellyfishConfig const &jelly_config, std::string const &login, std::string const &create, int storage) : _jelly(jelly_config), finish_(false), _login(login), _create(create), _storage(storage) {}
   void Run();
 
  private:
@@ -57,6 +57,9 @@ class Commands {
   Jellyfish _jelly;
   boost::timer::cpu_timer _timer;
   bool finish_;
+  std::string _login;
+  std::string _create;
+  int _storage;
 
   // PrivateKeyPtr null_priv_key_;
   // bool result_arrived_, finish_;

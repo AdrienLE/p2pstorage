@@ -102,7 +102,7 @@ JellyfishReturnCode Jellyfish::getFile( std::string const &unique_name, std::str
             if (hash != block.hash_id)
             {
                 ULOG(WARNING) << "Bad hash for block: " << maidsafe::EncodeToBase64(block.hash_id);
-                return false; // TODO: Handle the specifics
+                return false;
             }
             std::string filename = std::string("/tmp/tmpblock_") + maidsafe::EncodeToBase32(maidsafe::RandomString(16));
             std::ofstream f(filename);

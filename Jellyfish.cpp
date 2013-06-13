@@ -53,18 +53,22 @@ mk::Key Jellyfish::getKey(Table t, std::string const &key)
     return mk::Key(crypto::Hash<crypto::SHA512>(table_name + std::string(":") + key));
 }
 
-JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, long long size, ClientProof const &client, int64_t total_size )
+JellyInternalStatus::type Jellyfish::localPrepareAdd( std::string const &id, long long size, ClientProof const &client, long long total_size )
 {
     if (!_files_store)
         return JellyInternalStatus::STORAGE_UNITIALIZED;
+    if (!userHasSpace(client.user, std::max(N_PARTS * size, total_size)))
+        return JellyInternalStatus::YOU_DONT_HAVE_SPACE;
     ULOG(INFO) << "localPrepareAdd(" << maidsafe::EncodeToHex(id) << ", " << size << ", " << client.user << ")";
     return _files_store->prepareAdd(id, size, client);
 }
 
-JellyInternalStatus::type Jellyfish::localAdd( std::string const &salt, std::string const & id, std::string const & file, ClientProof const &client, int64_t total_size )
+JellyInternalStatus::type Jellyfish::localAdd( std::string const &salt, std::string const & id, std::string const & file, ClientProof const &client, long long total_size )
 {
     if (!_files_store)
         return JellyInternalStatus::STORAGE_UNITIALIZED;
+    if (!userHasSpace(client.user, std::max((long long)(N_PARTS * file.size()), total_size)))
+        return JellyInternalStatus::YOU_DONT_HAVE_SPACE;
     ULOG(INFO) << "localAdd(" << maidsafe::EncodeToHex(salt) << ", " << maidsafe::EncodeToHex(id) << ", " << maidsafe::EncodeToBase64(file.substr(0, 100)) << ", " << client.user << ")";
     return _files_store->add(salt, id, file, client);
 }
@@ -100,7 +104,7 @@ void Jellyfish::localGetFile(FileStatus& _return, const std::string& id, const C
     _files_store->localGetFile(_return, id, client);
 }
 
-bool Jellyfish::storeFileData( File &file )
+bool Jellyfish::storeFileData( File &file, uint64_t part_size )
 {
     int store_result;
     {
@@ -123,6 +127,7 @@ bool Jellyfish::storeFileData( File &file )
         AbbreviatedFile abv;
         abv.hash = file.hash;
         abv.size = file.size;
+        abv.part_size = part_size;
         abv.relative_path = file.relative_path;
         mk::Key k = getKey(tUserFiles, _login);
         std::string value = serialize_cast<std::string>(abv);
@@ -134,6 +139,83 @@ bool Jellyfish::storeFileData( File &file )
             return false;
         }
     }
+    return true;
+}
+
+#define N_DAYS 30
+
+bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
+{
+    boost::unordered_set<AbbreviatedFile> files;
+    if (!listFiles(files, username))
+        return false;
+    mk::Key k = getKey(tStorage, _login);
+    mk::FindValueReturns returns;
+    Synchronizer<mk::FindValueReturns> sync(returns);
+    _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
+    sync.wait();
+    if (returns.return_code != mk::kSuccess)
+        return false;
+    int64_t max_size = 0;
+    for (auto elem: returns.values_and_signatures)
+    {
+        StorageData storage_data = serialize_cast<StorageData>(elem.first);
+        k = getKey(tKarma, storage_data.node_id);
+        mk::FindValueReturns returns2;
+        Synchronizer<mk::FindValueReturns> sync2(returns2);
+        _jelly_node->node()->FindValue(k, _private_key_ptr, sync2);
+        sync.wait();
+        uint64_t node_size = storage_data.size;
+        int reasons[last_KarmaReason_enum] = {0};
+        boost::unordered_set<uint64_t> bad_hours;
+        uint64_t node_hour = storage_data.node_creation_hour;
+        bool tempered_time = false;
+        if (!returns2.return_code == mk::kSuccess)
+        {
+            for (auto r: returns2.values_and_signatures)
+            {
+                Karma karma = serialize_cast<Karma>(r.first);
+                reasons[karma.reason]++;
+                if (karma.reason == bCantConnect)
+                {
+                    bad_hours.insert(karma.hour);
+                }
+                if (karma.node_creation_hour < node_hour)
+                {
+                    node_hour = karma.node_creation_hour;
+                    if (node_hour - karma.node_creation_hour > 12)
+                        tempered_time = true;
+                }
+            }
+            if (reasons[bMissingPart] == 2)
+                node_size /= 2;
+            else if (reasons[bMissingPart] > 2)
+                node_size = 0;
+            if (reasons[bSuspiciousRefuse] > 5)
+                node_size = 0;
+            else if (reasons[bSuspiciousRefuse] >= 3)
+                node_size /= 2;
+            if (tempered_time)
+                node_size = 0;
+            float actual_ratio = ((float) bad_hours.size()) / (N_DAYS * 24);
+            float expected_ratio = ((float) N_PARTS + (float)N_CODES/3) / (N_PARTS + N_CODES);
+            node_size *= actual_ratio / expected_ratio;
+        }
+        max_size += node_size;
+    }
+
+    k = getKey(tUserFiles, _login);
+    _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
+    sync.wait();
+    for (auto elem: returns.values_and_signatures)
+    {
+        AbbreviatedFile abv = serialize_cast<AbbreviatedFile>(elem.first);
+        if (abv.size > max_size)
+            return false;
+        max_size -= std::max(abv.size, abv.part_size * N_PARTS);
+    }
+    if (size > max_size)
+        return false;
     return true;
 }
 

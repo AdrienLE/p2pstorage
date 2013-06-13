@@ -6,7 +6,7 @@ namespace bptime = boost::posix_time;
 
 struct JellyfishConfig
 {
-  JellyfishConfig() : alpha(3), beta(2), k(4), ports(8000, 65535), bootstrap_contacts(), mean_refresh_interval(1500), thread_count(10) {}
+  JellyfishConfig() : alpha(3), beta(2), k(10), ports(8000, 65535), bootstrap_contacts(), mean_refresh_interval(300), thread_count(10) {}
 
   int alpha;
   int beta;

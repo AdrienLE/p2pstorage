@@ -60,11 +60,14 @@ public:
     JellyfishReturnCode addFile(std::string const &path, std::string const &unique_name);
     JellyfishReturnCode getFile(std::string const &unique_name, std::string const &path);
     template<class Container>
-    JellyfishReturnCode listFiles(Container &cont)
+    JellyfishReturnCode listFiles(Container &cont, std::string const &user = "")
     {
+        std::string const *login = &user;
+        if (user == "")
+            login = &_login;
         maidsafe::dht::FindValueReturns findvalue;
         Synchronizer<maidsafe::dht::FindValueReturns> sync(findvalue);
-        mk::Key k = getKey(tUserFiles, _login);
+        mk::Key k = getKey(tUserFiles, *login);
         _jelly_node->node()->FindValue(k, _private_key_ptr, sync);
         sync.wait();
         if (findvalue.return_code != mk::kSuccess)
@@ -82,8 +85,8 @@ public:
     
     std::string const &login() const { return _login; }
 
-    JellyInternalStatus::type localPrepareAdd(std::string const &id, long long size, ClientProof const &client, int64_t total_size);
-    JellyInternalStatus::type localAdd(std::string const &salt, std::string const &id, std::string const &file, ClientProof const &client, int64_t total_size);
+    JellyInternalStatus::type localPrepareAdd(std::string const &id, long long size, ClientProof const &client, long long total_size);
+    JellyInternalStatus::type localAdd(std::string const &salt, std::string const &id, std::string const &file, ClientProof const &client, long long total_size);
     JellyInternalStatus::type localRemove(std::string const &id, ClientProof const &client);
     void hashPart(HashStatus &res, std::string const &id, std::string const &salt, ClientProof const &client);
     void localGetFile(FileStatus& _return, const std::string& id, const ClientProof& client);
@@ -120,9 +123,10 @@ protected:
     bool contactServer(maidsafe::dht::Contact const &contact, boost::function<bool (JellyInternalClient &)> fct, bool raise = false, bool log = false);
 
     bool addBigFile(File &file, uint64_t size, std::vector<std::string> const &parts, std::vector<std::string> const &codes);
-    bool storeFileData( File &file );
+    bool storeFileData( File &file, uint64_t part_size = 0 );
     bool addSmallFile(File &file, const char *filename, uint64_t size);
     static bool decryptFile(std::string const &iv, std::string const &key, std::string const &in, std::string const &out);
+    bool userHasSpace(const std::string &username, int64_t size);
 
     void tryFindStorageData();
     
@@ -134,15 +138,21 @@ protected:
         {}
         void operator()(Type value)
         {
-            _ret = value;
+            {
+                scoped_lock l(*_mutex);
+                _ret = value;
+            }
             _cond_var->notify_one();
         }
         void operator()(int res, Type value)
         {
-            ULOG(INFO) << res;
-            *_has_result = true;
-            *_result = res;
-            _ret = value;
+            {
+                scoped_lock l(*_mutex);
+                ULOG(INFO) << res;
+                *_has_result = true;
+                *_result = res;
+                _ret = value;
+            }
             _cond_var->notify_one();
         }
         void wait()

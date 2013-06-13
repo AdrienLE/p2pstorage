@@ -11,7 +11,8 @@ MAKE_ENUM(Table,
           (tFileKey)
           (tStoredBlocks)
           (tUserFiles)
-          (tFullFile))
+          (tFullFile)
+          (tKarma))
 
 struct UserData
 {
@@ -32,16 +33,29 @@ struct UserData
     }
 };
 
+static uint64_t hoursSinceEpoch()
+{
+    boost::posix_time::ptime current = boost::posix_time::second_clock::universal_time();
+    boost::posix_time::ptime epoch = boost::posix_time::time_from_string("1970-01-01 00:00:00.000");
+    boost::posix_time::time_duration span = current - epoch;
+    return span.total_seconds() / 3600;
+}
+
 struct StorageData
 {
     StorageData() : size(0) {}
     uint64_t size;
-    std::string storage_path; // This info probably shouldn't be stored publicly...
+    uint64_t node_creation_hour;
+    std::string storage_path;
+    std::string node_id;
 
     template<class Archive>
     void serialize(Archive & ar, const unsigned version)
     {
         ar & size;
+        ar & storage_path;
+        ar & node_id;
+        ar & node_creation_hour;
     }
 };
 
@@ -69,17 +83,24 @@ struct Challenge
 
 MAKE_ENUM(KarmaReason,
           (bMissingPart)
-          (bCantConnect))
+          (bCantConnect)
+          (bSuspiciousRefuse))
 
 struct Karma
 {
     KarmaReason reason;
-    std::string node;
-    uint64_t node_size;
-    std::string originating_node;
-    std::string originating_user;
-    std::string block_id;
-    uint64_t timestamp;
+    uint64_t hour;
+    uint64_t node_creation_hour;
+    std::string randstr; // Use UUID to make sure that karma can be store even if there is an equivalent one already
+
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned version)
+    {
+        ar & reason;
+        ar & hour;
+        ar & node_creation_hour;
+        ar & randstr;
+    }
 };
 
 struct FileBlockInfo
@@ -97,8 +118,10 @@ struct FileBlockInfo
 
 struct AbbreviatedFile
 {
+    AbbreviatedFile() : size(0), part_size(0) {}
     std::string hash;
     uint64_t size;
+    uint64_t part_size;
     std::string relative_path;
 
     bool operator<(const AbbreviatedFile &a) const

@@ -5,7 +5,8 @@ enum JellyInternalStatus
   STORAGE_UNITIALIZED = 2,
   INVALID_REQUEST = 3,
   NO_SUCH_FILE = 4,
-  YOU_DONT_HAVE_SPACE = 5
+  YOU_DONT_HAVE_SPACE = 5,
+  NO_SUCH_USER = 6
 }
 
 struct ClientProof

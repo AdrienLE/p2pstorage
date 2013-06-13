@@ -141,6 +141,9 @@ int main(int argc, char **argv) {
         PortRange port_range(8000, 65535);
         std::string logfile, bootstrap_file("bootstrap_contacts");
         std::string ip("127.0.0.1");
+        std::string login;
+        std::string create;
+        int storage = -1;
         JellyfishConfig jelly_config;
 //        int refresh_interval = jelly_config.mean_refresh_interval;
         po::options_description options_description("Options");
@@ -162,6 +165,9 @@ int main(int argc, char **argv) {
             ("beta", po::value(&jelly_config.beta)->default_value(jelly_config.beta),
              "Kademlia beta; number of returned Find RPCs required to start a "
              "subsequent iteration.")
+            ("login", po::value(&login)->default_value(login), "Login name (not necessary)")
+            ("create", po::value(&create)->default_value(create), "Create account with login (not necessary)")
+            ("init_storage", po::value(&storage)->default_value(storage), "Init storage (not necessary, need create)")
             ("thread_count", po::value(&jelly_config.thread_count)->default_value(jelly_config.thread_count),
              "Number of worker threads.");
 //            ("refresh_interval,r",
@@ -253,7 +259,7 @@ int main(int argc, char **argv) {
             return mk::kSuccess;
         }
 
-        Commands commands(jelly_config);
+        Commands commands(jelly_config, login, create, storage);
         commands.Run();
     }
     catch(const std::exception &e) {
