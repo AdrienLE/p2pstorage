@@ -21,7 +21,7 @@ void FilesStore::hashPart( HashStatus & res, std::string const & id, std::string
 // TODO: actually create the file in advance
 JellyInternalStatus::type FilesStore::prepareAdd( std::string const & id, long long size, ClientProof const & client )
 {
-    printf("Remaining size (%lu): %lu\n", size, _remaining_size);
+    printf("Remaining size (%llu): %llu\n", size, _remaining_size);
     scoped_lock l(_mutex);
     updatePromises();
     if (_remaining_size < (uint64_t)size)
@@ -103,6 +103,7 @@ void FilesStore::localGetFile( FileStatus &_return, const std::string &id, const
     std::ifstream f(path);
     if (!f)
     {
+        ULOG(WARNING) << "Could not open: " << path;
         _return.status = JellyInternalStatus::NO_SUCH_FILE;
         return;
     }
