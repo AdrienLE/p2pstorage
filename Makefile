@@ -27,3 +27,5 @@ always:
 
 jelly: always JellyInclude.h.gch gen-cpp $(OBJ)
 	$(CXX) $(CFLAGS) -o jelly $(OBJ) $(LDFLAGS)
+
+re: clean all
