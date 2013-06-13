@@ -4,10 +4,7 @@ if [ $# -le 1 ]; then
     echo "Usage: sh Script_autorun.sh [run mult] [stop mult]"
 else
     echo "Getting bootstrap file..."
-    chmod 700 mailtorkey.pem
-    scp -i mailtorkey.pem ubuntu@ec2-50-17-89-139.compute-1.amazonaws.com:/home/ubuntu/p2pstorage/bootstrap_contacts .
-
-
+    bash get_bootstrap_contacts.sh
     echo "Starting loop..."
     first=1
     client=$RANDOM$RANDOM$RANDOM
