@@ -60,13 +60,13 @@ struct StoredBlock
     }
 };
 
-MAKE_ENUM(BadReason,
+MAKE_ENUM(KarmaReason,
           (bMissingPart)
           (bCantConnect))
 
-struct BadRecord
+struct Karma
 {
-    BadReason reason;
+    KarmaReason reason;
     std::string node;
     uint64_t node_size;
     std::string originating_node;

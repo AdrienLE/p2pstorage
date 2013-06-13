@@ -55,7 +55,8 @@ class Commands {
   void ProcessCommand(const std::string &cmdline);
 
   Jellyfish _jelly;
-    bool finish_;
+  boost::timer::cpu_timer _timer;
+  bool finish_;
 
   // PrivateKeyPtr null_priv_key_;
   // bool result_arrived_, finish_;

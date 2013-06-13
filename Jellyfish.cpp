@@ -107,7 +107,8 @@ bool Jellyfish::storeFileData( File &file )
             ULOG(INFO) << "Adding file: " << maidsafe::EncodeToBase64(b.hash_id);
         Synchronizer<int> sync_result(store_result);
         mk::Key k = getKey(tFile, file.hash);
-        _jelly_node->node()->Store(k, serialize_cast<std::string>(file), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+        std::string value = serialize_cast<std::string>(file);
+        _jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
         sync_result.wait();
         if (store_result != mk::kSuccess)
         {
@@ -123,7 +124,8 @@ bool Jellyfish::storeFileData( File &file )
         abv.size = file.size;
         abv.relative_path = file.relative_path;
         mk::Key k = getKey(tUserFiles, _login);
-        _jelly_node->node()->Store(k, serialize_cast<std::string>(abv), "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+        std::string value = serialize_cast<std::string>(abv);
+        _jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
         sync_result.wait();
         if (store_result != mk::kSuccess)
         {

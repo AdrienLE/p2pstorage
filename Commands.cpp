@@ -38,6 +38,7 @@ using namespace maidsafe;
 
 
 void Commands::Run() {
+  _timer.start();
   PrintUsage();
   while (!finish_ && std::cin.good()) {
     std::cout << "Jellyfish (" << _jelly.login() << ") > ";
@@ -57,6 +58,7 @@ void Commands::PrintUsage() {
   ULOG(INFO) << "\tput <path> <unique_name>          Add file with unique name.";
   ULOG(INFO) << "\tls                                List files (unique names and sizes).";
   ULOG(INFO) << "\tget <unique_name> <path>          Get file.";
+  ULOG(INFO) << "\tcpu                               Get CPU % since start.";
   ULOG(INFO) << "\texit                              Stop the node and exit.";
   ULOG(INFO) << "\nSizes are 2^<size>GB.";
 }
@@ -152,6 +154,23 @@ void Commands::ProcessCommand(const std::string &cmdline) {
           JellyfishReturnCode ret = _jelly.getFile(args[0], args[1]);
           if (ret != jSuccess)
               ULOG(ERROR) << "Get error: " << JellyfishReturnCode2String(ret);
+          good_size = true;
+      }
+  }
+  else if (cmd == "cpu")
+  {
+      if (args.size() == 0)
+      {
+          boost::timer::cpu_times t = _timer.elapsed();
+          printf("CPU usage: %.2f\n", ((double)t.user * 100) / t.wall);
+          good_size = true;
+      }
+  }
+  else if (cmd == "pid")
+  {
+      if (args.size() == 0)
+      {
+          ULOG(INFO) << getpid();
           good_size = true;
       }
   }

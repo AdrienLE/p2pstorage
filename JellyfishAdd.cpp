@@ -151,8 +151,8 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
                 int store_result;
                 Synchronizer<int> sync_result(store_result);
                 mk::Key k = getKey(tStoredBlocks, contact.node_id().String());
-                _jelly_node->node()->Store(k,
-                    serialize_cast<std::string>(stored_block), "", boost::posix_time::pos_infin,
+                std::string value = serialize_cast<std::string>(stored_block);
+                _jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin,
                     PrivateKeyPtr(), sync_result);
                 sync_result.wait();
                 if (store_result != mk::kSuccess)

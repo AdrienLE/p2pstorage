@@ -52,7 +52,8 @@ JellyfishReturnCode Jellyfish::initStorage( std::string const &path, uint64_t si
     int result;
     Synchronizer<int> sync(result);
     mk::Key k = getKey(tStorage, _keys->identity);
-    _jelly_node->node()->Store(k, serialize_cast<std::string>(storage_data), "", boost::posix_time::pos_infin, _private_key_ptr, sync);
+    std::string value = serialize_cast<std::string>(storage_data);
+    _jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin, _private_key_ptr, sync);
     sync.wait();
     if (result != mt::kSuccess)
     {
