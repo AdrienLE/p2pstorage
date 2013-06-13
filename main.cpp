@@ -165,9 +165,9 @@ int main(int argc, char **argv) {
             ("beta", po::value(&jelly_config.beta)->default_value(jelly_config.beta),
              "Kademlia beta; number of returned Find RPCs required to start a "
              "subsequent iteration.")
-            ("login", po::value(&login)->default_value(login), "Login name (not necessary)")
-            ("create", po::value(&create)->default_value(create), "Create account with login (not necessary)")
-            ("init_storage", po::value(&storage)->default_value(storage), "Init storage (not necessary, need create)")
+            ("login", po::value<std::string>(&login)->default_value(login), "Login name (not necessary)")
+            ("create", po::value<std::string>(&create)->default_value(create), "Create account with login (not necessary)")
+            ("init_storage", po::value<int>(&storage)->default_value(storage), "Init storage (not necessary, need create)")
             ("thread_count", po::value(&jelly_config.thread_count)->default_value(jelly_config.thread_count),
              "Number of worker threads.");
 //            ("refresh_interval,r",
@@ -245,6 +245,15 @@ int main(int argc, char **argv) {
             LOG(ERROR) << "No contacts found in bootstrap contacts file.";
             return 1;
         }
+        if (variables_map.count("create")) {
+            create = variables_map["create"].as<std::string>();
+        }
+        if (variables_map.count("login")) {
+            login = variables_map["login"].as<std::string>();
+        }
+        if (variables_map.count("init_storage")) {
+            storage = variables_map["init_storage"].as<int>();
+        }
 
         jelly_config.bootstrap_contacts = bootstrap_contacts;
 
@@ -258,6 +267,8 @@ int main(int argc, char **argv) {
             jelly.runInitNode(bootstrap_file_path);
             return mk::kSuccess;
         }
+
+        ULOG(INFO) << "create: " << create << " login: " << login << " storage: " << storage;
 
         Commands commands(jelly_config, login, create, storage);
         commands.Run();

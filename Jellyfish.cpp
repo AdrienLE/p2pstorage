@@ -146,14 +146,13 @@ bool Jellyfish::storeFileData( File &file, uint64_t part_size )
 
 bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
 {
-    return true;
     boost::unordered_set<AbbreviatedFile> files;
     if (!listFiles(files, username))
         return false;
     mk::Key k = getKey(tStorage, _login);
     mk::FindValueReturns returns;
     Synchronizer<mk::FindValueReturns> sync(returns);
-    _jelly_node->node()->FindValue(k, _private_key_ptr, sync, 0, false);
+    _jelly_node->node()->FindValue(k, mk::PrivateKeyPtr(), sync, 0, false);
     sync.wait();
     if (returns.return_code != mk::kSuccess)
         return false;
@@ -161,6 +160,7 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
     for (auto elem: returns.values_and_signatures)
     {
         StorageData storage_data = serialize_cast<StorageData>(elem.first);
+        ULOG(INFO) << storage_data.size;
         k = getKey(tKarma, storage_data.node_id);
         mk::FindValueReturns returns2;
         Synchronizer<mk::FindValueReturns> sync2(returns2);
