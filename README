@@ -1,13 +1,37 @@
-J'ai un nouveau nombre de parties et de nouvelles techniques qui devraient rendre le truc plus efficace. Garde bien les ancienne donnees et fait genre des tests a plusieurs nombres de nodes idealement, et a au moins un relativement eleve pour sur.
+Requirements:
+- gcc 4.7 and higher
+- boost library 1.53 and higher
+- Linux OS
 
-Tu peux faire le test du CPU ca marchera avec tout la, chope juste le CPU average et voila.
+Installation steps:
+Step 1: Build MaidSafe
+      cd libs/MaidSafe-Common/maidsafe_common_lib/build/Linux/Release
+      cmake -DCMAKE_CXX_FLAGS=-fpermissive ../../..
+      make
+      make install
+      
+      cd libs/MaidSafe-Transport/build/Linux/Release
+      cmake -DCMAKE_CXX_FLAGS=-fpermissive ../../..
+      make
+      make install
+      
+      cd libs/MaidSafe-DHT/build/Linux/Release
+      cmake -DCMAKE_CXX_FLAGS=-fpermissive ../../..
+      make
+      make install
 
-Fais des tableaux et des graphes. Regarde le pdf dans paper (comme tu vois il reste encore pas mal a ecrire...) pour t'inspirer. Tu peux tout mettre dans des images ca m'ira.
+Step 2: Build  Jerasure
+      cd libs/Jerasure
+      make
+      sudo make install
 
-Pour les graphs je les ai fait avec matplotlib en python. Si tu veux tu me donne genre un fichier avec les les x et les y sur chaque ligne (separes par un espace par example) et je te fais un rendu du meme type de graphe en 2sec.
+Step 3: Build Jellyfish
+      make re
 
-Essaie d'ecrire du texte que tu pense qu'il faudrait avoir dans la partie Tests.
+Execution:
+To run a bootstrap node:
+   (dont forget to remove the file "bootstrap_contacts" if you are restarting the network)
+   ./jelly -f
 
-Mes graphes dans le pdf c'est un code de simu vite fait que j'ai fait. On peut montrer qu'on est en dessous de la simu et donner des explications en gros.
-
-Y a aussi les hash donc si tu veux tester tu peux rm le contenu du dossier de storage d'un client et voir si ca te dit que y a un pb a un moment. Fait le sur plusieurs nodes parce que ca teste un truc random genre toutes les 10mn
+To run a basic node:
+   ./jelly
