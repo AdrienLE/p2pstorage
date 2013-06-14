@@ -14,7 +14,7 @@ else
     t_stop=0
     t_dec=10
 
-    $delay=$(($RANDOM%(T/10)))
+    delay=$(($RANDOM%($T/10)))
     echo "Starting delay is $delay, waiting..."
     sleep $delay
 
