@@ -12,9 +12,9 @@ else
 
     t_run=0
     t_stop=0
-    t_dec=10
+    t_dec=8
 
-    delay=$(($RANDOM%($T/10)))
+    delay=$(($RANDOM%($T/5)))
     echo "Starting delay is $delay, waiting..."
     sleep $delay
 
