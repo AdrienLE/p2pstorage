@@ -426,7 +426,6 @@ int main (int argc, char **argv) {
 	data = (char **)malloc(sizeof(char*)*k);
 	coding = (char **)malloc(sizeof(char*)*m);
 	for (i = 0; i < m; i++) {
-	  printf("%d\n", blocksize);
 		coding[i] = (char *)malloc(sizeof(char)*blocksize);
                 if (coding[i] == NULL) { perror("malloc"); exit(1); }
 	}
@@ -481,18 +480,14 @@ int main (int argc, char **argv) {
 	/* Read in data until finished */
 	n = 1;
 	total = 0;
-	printf("buffersize: %d (%d) - %d (%d)\n", buffersize, packetsize, newsize, newsize/k);
-
 
 	while (n <= readins) {
 		/* Check if padding is needed, if so, add appropriate 
 		   number of zeros */
 		if (total < size && total+buffersize <= size) {
-		  printf("read(%d)\n", buffersize);
 			total += jfread(block, sizeof(char), buffersize, fp);
 		}
 		else if (total < size && total+buffersize > size) {
-		  printf("read(%d)\n", buffersize);
 			extra = jfread(block, sizeof(char), buffersize, fp);
 			for (i = extra; i < buffersize; i++) {
 				block[i] = '0';
@@ -525,14 +520,6 @@ int main (int argc, char **argv) {
 				jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
 				break;
 			case Cauchy_Good:
-			  {int i;
-			  for (i = 1; i <= 5; ++i)
-			    printf("%d\n", data[i] - data[i - 1]);
-			  for (i = 1; i <= 10; ++i)
-			    printf("%d\n", coding[i] - coding[i - 1]);
-				   }
-
-			  printf("jerasure_schedule_encode(%d, %d, %d, %p, %p, %p, %d, %d)\n", k, m, w, schedule, data, coding, blocksize, packetsize);
 				jerasure_schedule_encode(k, m, w, schedule, data, coding, blocksize, packetsize);
 				break;
 			case Liberation:
