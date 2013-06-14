@@ -13,6 +13,11 @@ else
     t_run=0
     t_stop=0
     t_dec=10
+
+    $delay=$(($RANDOM%(T/10)))
+    echo "Starting delay is $delay, waiting..."
+    sleep $delay
+
     while [ 1 ]
     do
 	rdm=$(($RANDOM%($T/($t_dec/2))-($T/$t_dec)))
