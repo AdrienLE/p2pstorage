@@ -105,10 +105,6 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
         std::string hash = HashSalt<crypto::SHA256>(file.salt, block);
         block.clear();
         block.seekg(0, std::ios::beg);
-        for (int i = 0; i < 4; ++i)
-        {
-
-        }
         std::string content;
         content.resize(size_part);
         block.read(&content[0], size_part);
@@ -150,23 +146,22 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
                 info.node_id = contact.node_id().String();
                 file.blocks.push_back(info);
 
-                StoredBlock stored_block;
-                stored_block.salt = file.salt;
-                stored_block.hash_id = hash;
-                stored_block.size = size_part;
+                //StoredBlock stored_block;
+                //stored_block.salt = file.salt;
+                //stored_block.hash_id = hash;
+                //stored_block.size = size_part;
 
-                int store_result;
-                Synchronizer<int> sync_result(store_result);
-                mk::Key k = getKey(tStoredBlocks, contact.node_id().String());
-                std::string value = serialize_cast<std::string>(stored_block);
-                _jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin,
-                    PrivateKeyPtr(), sync_result);
-                sync_result.wait();
-                if (store_result != mk::kSuccess)
-                {
-                    client.removePart(hash, proof);
-                    return false;
-                }
+                //int store_result;
+                //Synchronizer<int> sync_result(store_result);
+                //mk::Key k = getKey(tStoredBlocks, contact.node_id().String());
+                //std::string value = serialize_cast<std::string>(stored_block);
+                //_jelly_node->node()->Store(k, value, "", boost::posix_time::pos_infin, _private_key_ptr, sync_result);
+                //sync_result.wait();
+                //if (store_result != mk::kSuccess)
+                //{
+                //    client.removePart(hash, proof);
+                //    return false;
+                //}
                 ULOG(INFO) << "Found good node!";
                 return true;
             }))
