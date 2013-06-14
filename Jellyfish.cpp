@@ -144,6 +144,7 @@ bool Jellyfish::storeFileData( File &file, uint64_t part_size )
 
 bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
 {
+  return true; // TODO
     boost::unordered_set<AbbreviatedFile> files;
     if (!listFiles(files, username))
         return false;

@@ -25,6 +25,7 @@ else
 	stop_time=$((($T*$2)/($1 + $2)-$rdm))
 	t_run=$(($t_run+$run_time))
 	t_stop=$(($t_stop+$stop_time))
+	echo $run_time $stop_time
 	echo "[AUTORUN] Running client '$client' for $run_time secondes"
 	if [ $first -eq 1 ]; then
 	    first=0
