@@ -94,7 +94,7 @@ void Jellyfish::hashPart( HashStatus &res, std::string const & id, std::string c
 
 void Jellyfish::localGetFile(FileStatus& _return, const std::string& id, const ClientProof& client)
 {
-    _return.status = JellyInternalStatus::INVALID_REQUEST;
+    _return.status = JellyInternalStatus::NO_SPACE_LEFT;
     if (!_files_store)
     {
         _return.status = JellyInternalStatus::STORAGE_UNITIALIZED;
@@ -142,11 +142,8 @@ bool Jellyfish::storeFileData( File &file, uint64_t part_size )
     return true;
 }
 
-#define N_DAYS 30
-
 bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
 {
-    return true;
     boost::unordered_set<AbbreviatedFile> files;
     if (!listFiles(files, username))
         return false;
@@ -203,8 +200,8 @@ bool Jellyfish::userHasSpace(const std::string &username, int64_t size)
             float expected_ratio = ((float) N_PARTS + (float)N_CODES/3) / (N_PARTS + N_CODES);
             node_size *= actual_ratio / expected_ratio;
         }
-        ULOG(INFO) << "U " << node_size;
         max_size += ((float) N_PARTS) / (N_PARTS + N_CODES) * node_size;
+        ULOG(INFO) << "U " << node_size;
     }
     ULOG(INFO) << "User: " << username << " has " << max_size << " bytes of storage.";
 

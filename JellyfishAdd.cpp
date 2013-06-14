@@ -80,6 +80,7 @@ JellyfishReturnCode Jellyfish::addFile( std::string const &path, std::string con
 // TODO: do a proper two phase commit. Lock unique name
 bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> const &parts, std::vector<std::string> const &codes)
 {
+    scoped_lock l(_challenge_mutex);
     ULOG(INFO) << "Adding file bigger than " << THRESHOLD/1000 << "KB";
     ULOG(INFO) << "Searching node.";
     std::vector<std::string> data;
@@ -92,6 +93,8 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
     proof.user = _login;
 
     uint64_t max_part_size = 0;
+
+    std::unordered_map<std::string, int> already_stored_on;
 
     for (std::string const &filename: data)
     {
@@ -109,7 +112,7 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
         content.resize(size_part);
         block.read(&content[0], size_part);
 
-        mk::Key key = getKey(tFileKey, hash);
+        mk::Key key = getKey(tFileKey, SRandString(16));
         std::vector<mk::Contact> contacts;
         Synchronizer<std::vector<mk::Contact> > sync(contacts);
         _jelly_node->node()->FindNodes(key, sync, 100);
@@ -119,6 +122,10 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
             ULOG(WARNING) << "Could not find node.";
             return false;
         }
+        std::sort(contacts.begin(), contacts.end(), [&](mk::Contact const &a, mk::Contact const &b)
+        {
+            return already_stored_on[a.node_id().String()] < already_stored_on[b.node_id().String()];
+        });
 
         mk::Contact const *stored_on = 0;
         for (mk::Contact const &contact: contacts)
@@ -163,6 +170,20 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
                 //    return false;
                 //}
                 ULOG(INFO) << "Found good node!";
+                for (int i = 0; i < 4; ++i)
+                {
+                    block.clear();
+                    block.seekg(0, std::ios::beg);
+                    Challenge challenge;
+                    challenge.salt = SRandString(SALT_BYTES);
+                    challenge.hash_id = hash;
+                    challenge.challenge_hash = HashSalt<crypto::SHA256>(challenge.salt, block);
+                    challenge.node_id = contact.node_id().String();
+                    block.clear();
+                    block.seekg(0, std::ios::beg);
+                    _challenges._challenges.push_back(challenge);
+                }
+                already_stored_on[contact.node_id().String()]++;
                 return true;
             }))
                 stored_on = &contact;
@@ -173,6 +194,12 @@ bool Jellyfish::addBigFile(File &file, uint64_t size, std::vector<std::string> c
             // TODO: remove previous parts!!!
             return false;
         }
+    }
+
+    {
+        std::ofstream challenges_file(_config_path + "/challenges");
+        std::string serialized_challenges = serialize_cast<std::string>(_challenges);
+        challenges_file.write(&serialized_challenges[0], serialized_challenges.size());
     }
 
     return storeFileData(file, max_part_size);

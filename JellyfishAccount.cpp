@@ -167,6 +167,89 @@ void Jellyfish::startServer()
         _server->serve();
     }));
     condvar.wait(lock);
+
+    scoped_lock l(_challenge_mutex);
+    std::ifstream ch(_config_path + "/challenges");
+    std::string str;
+    if (ch)
+    {
+        ch.seekg(0, std::ios::end);
+        str.resize(ch.tellg());
+        ch.seekg(0, std::ios::beg);
+        ch.read(&str[0], str.size());
+        _challenges = serialize_cast<Challenges>(str);
+    }
+    _challenges_thread.reset(new boost::thread([this](){this->poseChallenges();}));
+}
+
+#define MAX_SECONDS 400
+
+void Jellyfish::poseChallenges()
+{
+    JellyNodePtr client_node(new JellyNode);
+    client_node->Init(static_cast<uint8_t>(_jelly_conf.thread_count),
+        mk::KeyPairPtr(), mk::MessageHandlerPtr(), true, _jelly_conf.k,
+        _jelly_conf.alpha, _jelly_conf.beta, _jelly_conf.mean_refresh_interval);
+    client_node->Start(_jelly_conf.bootstrap_contacts, _jelly_conf.ports);
+
+    while (true)
+    {
+        maidsafe::Sleep(boost::posix_time::seconds(rand() % MAX_SECONDS));
+        scoped_lock l(_challenge_mutex);
+        if (_challenges._challenges.size() == 0)
+            continue;
+        ULOG(INFO) << "Challenges: " << _challenges._challenges.size();
+        unsigned i = rand() % _challenges._challenges.size();
+        std::vector<mk::Contact> returns;
+        Synchronizer<std::vector<mk::Contact> > sync(returns);
+        mk::Key k(_challenges._challenges[i].node_id);
+        client_node->node()->FindNodes(k, sync, 10);
+        ULOG(INFO) << "Challenge to node: " << maidsafe::EncodeToBase64(k.String());
+        sync.wait();
+        ULOG(INFO) << "Challenge node result: " << sync.result();
+        if (sync.result() != mk::kSuccess)
+            continue;
+        mk::Contact const *good_node = 0;
+        for (mk::Contact const &node: returns)
+            if (node.node_id().String() == _challenges._challenges[i].node_id)
+                good_node = &node;
+        ULOG(INFO) << (good_node ? "Found good node" : "Not found node");
+        if (!good_node)
+            setNodeBad(_challenges._challenges[i], bCantConnect);
+        else if (!contactServer(*good_node, [&](JellyInternalClient &client)
+        {
+            HashStatus status;
+            ClientProof proof;
+            proof.user = _login;
+            client.hashPart(status, _challenges._challenges[i].hash_id, _challenges._challenges[i].salt, proof);
+            if (status.status != JellyInternalStatus::SUCCES || status.hash != _challenges._challenges[i].challenge_hash)
+                setNodeBad(_challenges._challenges[i], bMissingPart);
+            return true;
+        }))
+            setNodeBad(_challenges._challenges[i], bCantConnect);
+        _challenges._challenges.erase(_challenges._challenges.begin() + i);
+
+        std::ofstream challenges_file(_config_path + "/challenges");
+        std::string serialized_challenges = serialize_cast<std::string>(_challenges);
+        challenges_file.write(&serialized_challenges[0], serialized_challenges.size());
+    }
+}
+
+void Jellyfish::setNodeBad(Challenge const &ch, KarmaReason r)
+{
+    Karma karma;
+    karma.hour = hoursSinceEpoch();
+    karma.node_creation_hour = hoursSinceEpoch();
+    karma.randstr = SRandString(16);
+    karma.reason = r;
+    int result;
+    Synchronizer<int> sync(result);
+    mk::Key key = getKey(tKarma, ch.node_id);
+    std::string value = serialize_cast<std::string>(karma);
+    boost::posix_time::time_duration t = boost::posix_time::hours(N_DAYS * 24);
+    _jelly_node->node()->Store(key, value, "", t, _private_key_ptr, sync);
+    sync.wait();
+    ULOG(INFO) << "Found bad node: " << maidsafe::EncodeToBase64(ch.node_id) << " for part " << maidsafe::EncodeToBase64(ch.hash_id) << " (" << KarmaReason2String(r) << ")";
 }
 
 

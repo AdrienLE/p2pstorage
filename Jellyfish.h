@@ -32,10 +32,11 @@ MAKE_ENUM(JellyfishReturnCode,
 #define W 15
 #define OPTIMAL_PACKET_SIZE 4000
 #define N_PARTS 10
-#define N_CODES 13
+#define N_CODES 20
 #define THRESHOLD 100000
 #define SALT_BYTES 16
 #define UUID_BYTES (128/8)
+#define N_DAYS 30
 
 namespace mk = maidsafe::dht;
 
@@ -112,7 +113,11 @@ protected:
     boost::shared_ptr<boost::thread> _server_thread;
     boost::shared_ptr<apache::thrift::server::TThreadPoolServer> _server;
     boost::mutex _wait_mutex;
+    boost::mutex _challenge_mutex;
     typedef boost::mutex::scoped_lock scoped_lock;
+
+    Challenges _challenges;
+    boost::shared_ptr<boost::thread> _challenges_thread;
 
     boost::shared_ptr<FilesStore> _files_store;
     std::string _config_path;
@@ -128,7 +133,11 @@ protected:
     static bool decryptFile(std::string const &iv, std::string const &key, std::string const &in, std::string const &out);
     bool userHasSpace(const std::string &username, int64_t size);
 
+    void setNodeBad(Challenge const &ch, KarmaReason reason);
+
     void tryFindStorageData();
+
+    void poseChallenges();
     
     template<class Type>
     class Synchronizer

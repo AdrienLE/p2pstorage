@@ -110,8 +110,9 @@ JellyfishReturnCode Jellyfish::getFile( std::string const &unique_name, std::str
             filenames.push_back(filename);
             found_blocks.push_back(block);
             positions.push_back(current);
+            ULOG(INFO) << "Here";
             return true;
-        }, true); // TODO: Should we use worked?
+        }, false, true); // TODO: Should we use worked?
     }
     std::vector<std::istream *> streams;
     for (std::string const &filename: filenames)

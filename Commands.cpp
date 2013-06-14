@@ -49,6 +49,7 @@ void Commands::Run() {
   }
 
   PrintUsage();
+  _timer.start();
   while (!finish_ && std::cin.good()) {
     std::cout << "Jellyfish (" << _jelly.login() << ") > ";
     std::string cmdline;

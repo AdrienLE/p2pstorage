@@ -79,6 +79,27 @@ struct Challenge
     std::string hash_id;
     std::string salt;
     std::string challenge_hash;
+    std::string node_id;
+
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned version)
+    {
+        ar & salt;
+        ar & hash_id;
+        ar & challenge_hash;
+        ar & node_id;
+    }
+};
+
+struct Challenges
+{
+    std::vector<Challenge> _challenges;
+
+    template<class Archive>
+    void serialize(Archive & ar, const unsigned version)
+    {
+        ar & _challenges;
+    }
 };
 
 MAKE_ENUM(KarmaReason,
