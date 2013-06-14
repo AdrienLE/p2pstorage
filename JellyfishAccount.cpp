@@ -182,7 +182,7 @@ void Jellyfish::startServer()
     _challenges_thread.reset(new boost::thread([this](){this->poseChallenges();}));
 }
 
-#define MAX_SECONDS 400
+#define MAX_SECONDS 600
 
 void Jellyfish::poseChallenges()
 {

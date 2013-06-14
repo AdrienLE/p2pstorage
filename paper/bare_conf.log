@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.1415926-2.4-1.40.13 (MiKTeX 2.9) (preloaded format=pdflatex 2013.5.23)  14 JUN 2013 07:13
+This is pdfTeX, Version 3.1415926-2.4-1.40.13 (MiKTeX 2.9) (preloaded format=pdflatex 2013.5.23)  14 JUN 2013 15:53
 entering extended mode
 **bare_conf.tex
 (H:\p2pstorage\paper\bare_conf.tex
@@ -32,7 +32,7 @@ File: ot1ptm.fd 2001/06/04 font definitions for OT1/ptm.
 -- Using 8.5in x 11in (letter) paper.
 -- Using PDF output.
 \@IEEEnormalsizeunitybaselineskip=\dimen104
--- This is a 12 point document.
+-- This is an 11 point document.
 \CLASSINFOnormalsizebaselineskip=\dimen105
 \CLASSINFOnormalsizeunitybaselineskip=\dimen106
 \IEEEnormaljot=\dimen107
@@ -52,21 +52,21 @@ LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <10> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <10> not available
 (Font)              Font shape `OT1/ptm/b/it' tried instead on input line 731.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <11> not available
+(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <11> not available
+(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 731.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <12> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <12> not available
 (Font)              Font shape `OT1/ptm/b/it' tried instead on input line 731.
-LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <14> not available
+LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <17> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
-LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <14> not available
+LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <17> not available
 (Font)              Font shape `OT1/ptm/b/it' tried instead on input line 731.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <20> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <20> not available
-(Font)              Font shape `OT1/ptm/b/it' tried instead on input line 731.
-LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <22> not available
-(Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
-LaTeX Font Info:    Font shape `OT1/ptm/bx/it' in size <22> not available
 (Font)              Font shape `OT1/ptm/b/it' tried instead on input line 731.
 LaTeX Font Info:    Font shape `OT1/ptm/bx/n' in size <24> not available
 (Font)              Font shape `OT1/ptm/b/n' tried instead on input line 731.
@@ -158,104 +158,104 @@ LaTeX Font Info:    ... okay on input line 227.
 \MPnumerator=\count96
 \makeMPintoPDFobject=\count97
 \everyMPtoPDFconversion=\toks17
-)
-** WARNING: \and is valid only when in conference or peerreviewca
-modes (line 277).
-
-LaTeX Warning: Citation `coda' on page 1 undefined on input line 293.
-
-[1{C:/ProgramData/MiKTeX/2.9/pdftex/config/pdftex.map}
+) [1{C:/ProgramData/MiKTeX/2.9/pdftex/config/pdftex.map}
 
 
 ]
-
-LaTeX Warning: Citation `dropbox_slides' on page 2 undefined on input line 315.
-
-
+LaTeX Font Info:    Calculating math sizes for size <11> on input line 328.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <12> on input line 325.
+(Font)              <11> on input line 328.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <8> on input line 325.
+(Font)              <7.69997> on input line 328.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <6> on input line 325.
+(Font)              <5.5> on input line 328.
+
 <test.png, id=9, 578.16pt x 433.62pt>
 File: test.png Graphic file (type png)
  <use test.png>
-Package pdftex.def Info: test.png used on input line 331.
+Package pdftex.def Info: test.png used on input line 344.
 (pdftex.def)             Requested size: 248.60394pt x 186.45296pt.
 
 <test2.png, id=11, 578.16pt x 433.62pt>
 File: test2.png Graphic file (type png)
  <use test2.png>
-Package pdftex.def Info: test2.png used on input line 336.
+Package pdftex.def Info: test2.png used on input line 349.
 (pdftex.def)             Requested size: 248.60394pt x 186.45296pt.
 
-Underfull \vbox (badness 2359) has occurred while \output is active []
-
- [2 <H:/p2pstorage/paper/test.png> <H:/p2pstorage/paper/test2.png>]
-<flow1.png, id=19, 298.86656pt x 36.88782pt>
+<test3.png, id=12, 578.16pt x 433.62pt>
+File: test3.png Graphic file (type png)
+ <use test3.png>
+Package pdftex.def Info: test3.png used on input line 354.
+(pdftex.def)             Requested size: 248.60394pt x 186.45296pt.
+ [2]
+<flow1.png, id=18, 298.86656pt x 36.88782pt>
 File: flow1.png Graphic file (type png)
  <use flow1.png>
-Package pdftex.def Info: flow1.png used on input line 346.
+Package pdftex.def Info: flow1.png used on input line 374.
 (pdftex.def)             Requested size: 239.09355pt x 29.51027pt.
-
-Underfull \hbox (badness 10000) in paragraph at lines 374--375
- []\OT1/ptm/m/it/12 Karma: [][] \OT1/ptm/m/n/12 Mis-be-hav-ing nodes ac-cu-mu-l
-ate
+ [3 <H:/p2pstorage/paper/test.png> <H:/p2pstorage/paper/test2.png> <H:/p2pstora
+ge/paper/test3.png> <H:/p2pstorage/paper/flow1.png>] [4] [5]
+Underfull \hbox (badness 1484) in paragraph at lines 472--473
+\OT1/ptm/m/n/11 re-ceiv-ing and send-ing the files is con-cerned: only
  []
 
+[6] <cpu.png, id=35, 578.16pt x 433.62pt>
+File: cpu.png Graphic file (type png)
+ <use cpu.png>
+Package pdftex.def Info: cpu.png used on input line 508.
+(pdftex.def)             Requested size: 248.60394pt x 186.45296pt.
 
-Underfull \hbox (badness 3884) in paragraph at lines 374--375
-\OT1/ptm/m/n/12 karma. When a node finds an-other node is
- []
+<prob2.png, id=36, 578.16pt x 433.62pt>
+File: prob2.png Graphic file (type png)
+ <use prob2.png>
+Package pdftex.def Info: prob2.png used on input line 514.
+(pdftex.def)             Requested size: 248.60394pt x 186.45296pt.
 
-
-Underfull \hbox (badness 2644) in paragraph at lines 374--375
-\OT1/ptm/m/n/12 pub-lic karma set. Karma records ex-ist for a
- []
-
-[3 <H:/p2pstorage/paper/flow1.png>]
-
-LaTeX Warning: Citation `sybil' on page 4 undefined on input line 384.
-
+<prob.png, id=37, 578.16pt x 433.62pt>
+File: prob.png Graphic file (type png)
+ <use prob.png>
+Package pdftex.def Info: prob.png used on input line 520.
+(pdftex.def)             Requested size: 248.60394pt x 186.45296pt.
+ [7 <H:/p2pstorage/paper/cpu.png> <H:/p2pstorage/paper/prob2.png>]
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <9> on input line 421.
+(Font)              <9> on input line 533.
 LaTeX Font Info:    External font `cmex10' loaded for size
-(Font)              <5> on input line 421.
+(Font)              <6> on input line 533.
+LaTeX Font Info:    External font `cmex10' loaded for size
+(Font)              <5> on input line 533.
 
-Underfull \hbox (badness 10000) in paragraph at lines 431--432
+Underfull \hbox (badness 10000) in paragraph at lines 544--545
 []$\OT1/ptm/m/n/9 http : / / bashitout . com / 2009 / 08 / 30 /$
  []
 
 
-Overfull \hbox (71.16405pt too wide) in paragraph at lines 431--432
+Overfull \hbox (71.16405pt too wide) in paragraph at lines 544--545
 $\OT1/ptm/m/n/9 Linux-[]Compression-[]Comparison-[]GZIP-[]vs-[]BZIP2-[]vs-[]LZM
 A-[]vs-[]ZIP-[]vs-[]Compress .$
  []
 
-[4] (H:\p2pstorage\paper\bare_conf.aux)
+[8
 
-LaTeX Warning: There were undefined references.
-
- ) 
+ <H:/p2pstorage/paper/prob.png>] (H:\p2pstorage\paper\bare_conf.aux) ) 
 Here is how much of TeX's memory you used:
- 1924 strings out of 493921
- 29548 string characters out of 3144873
- 86604 words of memory out of 3000000
- 5233 multiletter control sequences out of 15000+200000
- 38947 words of font info for 74 fonts, out of 3000000 for 9000
+ 1952 strings out of 493921
+ 29948 string characters out of 3144873
+ 86616 words of memory out of 3000000
+ 5259 multiletter control sequences out of 15000+200000
+ 38939 words of font info for 74 fonts, out of 3000000 for 9000
  844 hyphenation exceptions out of 8191
- 27i,6n,20p,950b,315s stack positions out of 5000i,500n,10000p,200000b,50000s
-{C:/Program Files (x86)/MiKTeX 2.9/fonts/enc/dvips/fontname/8r.enc}<C:/Progra
-m Files (x86)/MiKTeX 2.9/fonts/type1/public/amsfonts/cm/cmmi12.pfb><C:/Program 
-Files (x86)/MiKTeX 2.9/fonts/type1/public/amsfonts/cm/cmr12.pfb><C:/Program Fil
-es (x86)/MiKTeX 2.9/fonts/type1/urw/times/utmb8a.pfb><C:/Program Files (x86)/Mi
-KTeX 2.9/fonts/type1/urw/times/utmbi8a.pfb><C:/Program Files (x86)/MiKTeX 2.9/f
-onts/type1/urw/times/utmr8a.pfb><C:/Program Files (x86)/MiKTeX 2.9/fonts/type1/
-urw/times/utmri8a.pfb>
-Output written on bare_conf.pdf (4 pages, 127144 bytes).
+ 27i,6n,20p,950b,319s stack positions out of 5000i,500n,10000p,200000b,50000s
+{C:/Progr
+am Files (x86)/MiKTeX 2.9/fonts/enc/dvips/fontname/8r.enc}<C:/Program Files (x8
+6)/MiKTeX 2.9/fonts/type1/public/amsfonts/cm/cmmi10.pfb><C:/Program Files (x86)
+/MiKTeX 2.9/fonts/type1/public/amsfonts/cm/cmr10.pfb><C:/Program Files (x86)/Mi
+KTeX 2.9/fonts/type1/urw/times/utmb8a.pfb><C:/Program Files (x86)/MiKTeX 2.9/fo
+nts/type1/urw/times/utmbi8a.pfb><C:/Program Files (x86)/MiKTeX 2.9/fonts/type1/
+urw/times/utmr8a.pfb><C:/Program Files (x86)/MiKTeX 2.9/fonts/type1/urw/times/u
+tmri8a.pfb>
+Output written on bare_conf.pdf (8 pages, 209092 bytes).
 PDF statistics:
- 47 PDF objects out of 1000 (max. 8388607)
+ 69 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 500000)
- 16 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 36 words of extra memory for PDF output out of 10000 (max. 10000000)
 
