@@ -86,8 +86,6 @@ int readins, n;
 /* Function prototype */
 void ctrl_bs_handler(int dummy);
 
-#define malloc(size) calloc((size), 1)
-
 int main (int argc, char **argv) {
 	FILE *fp;				// File pointer
 
@@ -320,32 +318,7 @@ int main (int argc, char **argv) {
 			i = jerasure_matrix_decode(k, m, w, matrix, 1, erasures, data, coding, blocksize);
 		}
 		else if (tech == Cauchy_Orig || tech == Cauchy_Good || tech == Liberation || tech == Blaum_Roth || tech == Liber8tion) {
-		  {
-		    int a;
-		    for (a = 0; erasures[a] != -1; ++a)
-		      printf("erasure: %d\n", erasures[a]);
-		  }
-		  {
-		    int a, b;
-		    for (a = 0; a < k; ++a)
-		      {
-			unsigned int checksum = 0;
-			for (b = 0; b < blocksize; ++b)
-			  checksum += data[a][b];
-			printf("checksum: %u\n", checksum);
-		      }
-		    for (a = 0; a < m; ++a)
-		      {
-			unsigned int checksum = 0;
-			for (b = 0; b < blocksize; ++b)
-			  checksum += coding[a][b];
-			printf("checksum: %u\n", checksum);
-		      }
-		  }
-		  printf("jerasure_schedule_decode_lazy(%d, %d, %d, %p, %p, %p, %p, %d, %d, 1)\n",
-			 k, m, w, bitmatrix, erasures, data, coding, blocksize, packetsize);
 			i = jerasure_schedule_decode_lazy(k, m, w, bitmatrix, erasures, data, coding, blocksize, packetsize, 1);
-			printf("c: '%c'\n", data[0][0]);
 		}
 		else {
 			fprintf(stderr, "Not a valid coding technique.\n");

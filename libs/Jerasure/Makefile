@@ -1,4 +1,4 @@
-PREFIX=/usr/local
+PREFIX=${HOME}/usr/local
 BINDIR=${PREFIX}/bin
 LIBDIR=${PREFIX}/lib
 INCDIR=${PREFIX}/include
